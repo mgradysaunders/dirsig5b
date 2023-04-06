@@ -11,6 +11,8 @@
 
 namespace d5b {
 
+enum class Status { NotDone, Done };
+
 constexpr double Pi = mi::constants::Pi<double>;
 constexpr double OneOverPi = mi::constants::OneOverPi<double>;
 constexpr double LightSpeed = mi::constants::LightSpeed<double>;
@@ -41,7 +43,5 @@ using mi::lengthSquare;
 using mi::normalize;
 using mi::signbit;
 using mi::Slice;
-
-enum class Status { NotDone, Done };
 
 } // namespace d5b
