@@ -1,10 +1,11 @@
 #pragma once
 
 #include "dirsig5b/Ray.h"
+#include "dirsig5b/Vertex.h"
 
 namespace d5b {
 
-class SensorRay final {
+class D5B_API SensorRay final {
 public:
   Ray ray;
 
@@ -23,21 +24,30 @@ public:
   };
 
   std::optional<Derivatives> derivatives;
-
-  std::function<SpectralVector()> initialThroughput;
-
-  std::function<void(const SpectralVector &)> processRadiance;
-
-  size_t maxBounces{0};
 };
 
-class Sensor {
+class D5B_API Problem final {
+public:
+  SpectralVector wavelength;
+
+  SpectralVector throughput;
+
+  size_t seed{0};
+
+  size_t bounceLimit{0};
+
+  std::function<SensorRay(Random &random)> sampleSensorRay;
+
+  std::function<Status(size_t numSamples, const std::vector<Vertex> &path, const SpectralVector &radiance)> acceptContribution;
+};
+
+using ProblemRequest = std::function<Problem()>;
+
+class D5B_API Sensor {
 public:
   virtual ~Sensor() = default;
 
-  enum class Status { MoreTodo, Done };
-
-  [[nodiscard]] virtual Status populateSensorRays(std::vector<SensorRay> &sensorRays) const = 0;
+  [[nodiscard]] virtual Status request(std::vector<ProblemRequest> &problemRequests) = 0;
 };
 
 } // namespace d5b

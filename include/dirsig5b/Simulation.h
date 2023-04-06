@@ -1,19 +1,21 @@
 #pragma once
 
+#include "dirsig5b/Medium.h"
 #include "dirsig5b/Sensor.h"
+#include "dirsig5b/Vertex.h"
 #include "dirsig5b/World.h"
 
 namespace d5b {
 
-class Simulator {
+class D5B_API Simulation {
 public:
-  const Sensor *sensor{nullptr};
+  Sensor *sensor{nullptr};
 
   const World *world{nullptr};
 
   void simulate();
 
-  void simulate(const SensorRay &sensorRay);
+  void simulate(Problem problem);
 };
 
 } // namespace d5b

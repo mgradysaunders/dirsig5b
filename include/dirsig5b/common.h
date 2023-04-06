@@ -42,4 +42,6 @@ using mi::normalize;
 using mi::signbit;
 using mi::Slice;
 
+enum class Status { NotDone, Done };
+
 } // namespace d5b

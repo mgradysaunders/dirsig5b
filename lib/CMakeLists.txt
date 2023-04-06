@@ -1,8 +1,10 @@
 add_library(
   dirsig5b 
   SHARED
+  LocalSurface.cc
+  LocalVolume.cc
   Scattering.cc
-  Simulator.cc
+  Simulation.cc
   )
 target_include_directories(
   dirsig5b 

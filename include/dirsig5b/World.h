@@ -1,15 +1,19 @@
 #pragma once
 
+#include "dirsig5b/LocalSurface.h"
 #include "dirsig5b/Ray.h"
-#include "dirsig5b/SurfaceLocation.h"
 
 namespace d5b {
 
-class World {
+class Medium;
+
+class D5B_API World {
 public:
   virtual ~World() = default;
 
-  [[nodiscard]] virtual bool intersect(const Ray &ray, SurfaceLocation &location) const = 0;
+  [[nodiscard]] virtual const Medium *mediumLookup(Vector3) const { return nullptr; }
+
+  [[nodiscard]] virtual bool intersect(Random &random, Ray ray, LocalSurface &localSurface) const = 0;
 };
 
 } // namespace d5b

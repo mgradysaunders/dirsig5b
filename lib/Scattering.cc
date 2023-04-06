@@ -4,8 +4,8 @@
 
 namespace d5b {
 
-void Scattering::initializeHenyeyGreenstein(double mu) {
-  auto phase{mi::render::HenyeyGreensteinPhase(mu)};
+void Scattering::initializeHenyeyGreenstein(double meanCosine) {
+  auto phase{mi::render::HenyeyGreensteinPhase(meanCosine)};
   *this = Scattering{
     [=](Vector3 omegaO, Vector3 omegaI, SpectralVector &f) { f = phase.phase(omegaO, omegaI); },
     [=](Vector3 omegaO, Vector3 omegaI) -> double { return phase.phase(omegaO, omegaI); },
@@ -14,32 +14,32 @@ void Scattering::initializeHenyeyGreenstein(double mu) {
     }};
 }
 
-void Scattering::initializeLambertian(double Lr, double Lt) {
-  double Wr = Lr / (Lr + Lt);
-  double Wt = Lt / (Lr + Lt);
+void Scattering::initializeLambertian(double fractionR, double fractionT) {
+  double weightR = fractionR / (fractionR + fractionT);
+  double weightT = fractionT / (fractionR + fractionT);
   *this = Scattering{
     [=](Vector3 omegaO, Vector3 omegaI, SpectralVector &f) {
       if (signbit(omegaO[2]) == signbit(omegaI[2])) {
-        f = Lr * OneOverPi * abs(omegaI[2]);
+        f = fractionR * OneOverPi * abs(omegaI[2]);
       } else {
-        f = Lt * OneOverPi * abs(omegaI[2]);
+        f = fractionT * OneOverPi * abs(omegaI[2]);
       }
     },
     [=](Vector3 omegaO, Vector3 omegaI) -> double {
       if (signbit(omegaO[2]) == signbit(omegaI[2])) {
-        return Wr * OneOverPi * abs(omegaI[2]);
+        return weightR * OneOverPi * abs(omegaI[2]);
       } else {
-        return Wt * OneOverPi * abs(omegaI[2]);
+        return weightT * OneOverPi * abs(omegaI[2]);
       }
     },
     [=](Random &random, Vector3 omegaO, Vector3 &omegaI, SpectralVector &beta) -> double {
       omegaI = cosineHemisphereSample<double>(random);
-      if (Wr == 1 || generateCanonical<double>(random) < Wr) {
-        omegaI[2] = copysign(omegaI[2], +omegaO[2]), beta *= Wr;
-        return Wr * OneOverPi * abs(omegaI[2]);
+      if (weightR == 1 || generateCanonical<double>(random) < weightR) {
+        omegaI[2] = copysign(omegaI[2], +omegaO[2]), beta *= weightR;
+        return weightR * OneOverPi * abs(omegaI[2]);
       } else {
-        omegaI[2] = copysign(omegaI[2], -omegaO[2]), beta *= Wt;
-        return Wt * OneOverPi * abs(omegaI[2]);
+        omegaI[2] = copysign(omegaI[2], -omegaO[2]), beta *= weightT;
+        return weightT * OneOverPi * abs(omegaI[2]);
       }
     }};
 }
@@ -66,8 +66,8 @@ void Scattering::initializeLinearCombination(std::vector<std::pair<double, Scatt
     [=](Random &random, Vector3 omegaO, Vector3 &omegaI, SpectralVector &beta) -> double {
       SpectralVector &f = beta;
       SpectralVector g(f.shape);
-      size_t i = 0;
       double u = generateCanonical<double>(random);
+      size_t i = 0;
       for (const auto &[weight, term] : *sharedWeightAndTerm) {
         if (u <= weight || i + 1 == sharedWeightAndTerm->size()) {
           if (double p = term.importanceSample(random, omegaO, omegaI, beta); !(p > 0 && mi::isfinite(p))) {
@@ -75,8 +75,8 @@ void Scattering::initializeLinearCombination(std::vector<std::pair<double, Scatt
           }
           break;
         } else {
-          i += 1;
           u -= weight;
+          i += 1;
         }
       }
       f = 0;
@@ -93,6 +93,7 @@ void Scattering::initializeLinearCombination(std::vector<std::pair<double, Scatt
     }};
 }
 
+#if 0
 void Scattering::addTransform(const Transform &transform) {
   *this = Scattering{
     [transform, evaluateBSDF = std::move(evaluateBSDF)](Vector3 omegaO, Vector3 omegaI, SpectralVector &f) {
@@ -113,5 +114,6 @@ void Scattering::addTransform(const Transform &transform) {
       return p;
     }};
 }
+#endif
 
 } // namespace d5b
