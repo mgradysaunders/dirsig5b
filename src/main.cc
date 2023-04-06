@@ -8,7 +8,7 @@
 
 class MySensor final : public d5b::Sensor {
 public:
-  [[nodiscard]] d5b::Status request(std::vector<d5b::ProblemRequest> &problemRequests) override {
+  [[nodiscard]] d5b::Status recordProblemRequests(std::vector<d5b::ProblemRequest> &problemRequests) override {
     problemRequests.reserve(512 * 512);
     for (int y = 0; y < 512; y++) {
       for (int x = 0; x < 512; x++) {
@@ -17,28 +17,20 @@ public:
           problem.wavelength = {0.4, 0.5, 0.6, 0.7};
           problem.throughput = {1.0, 1.0, 1.0, 1.0};
           problem.seed = x * 512 + y;
-          problem.sampleSensorRay = [=, this](d5b::Random &random) {
+          problem.sampleRay = [=, this](d5b::Random &random) {
             double dx = (x + d5b::generateCanonical<double>(random)) / 512.0 - 0.5;
             double dy = (y + d5b::generateCanonical<double>(random)) / 512.0 - 0.5;
-            return d5b::SensorRay{d5b::Ray{d5b::Vector3(0, 0, 4), d5b::normalize(d5b::Vector3(dx, -dy, -1))}, {}};
+            return d5b::Ray{d5b::Vector3(0, 0, 4), d5b::normalize(d5b::Vector3(dx, -dy, -1))};
           };
-          problem.acceptContribution =
-            [=, this](size_t sampleIndex, const std::vector<d5b::Vertex> &path, const d5b::SpectralVector &radiance) {
-              if (!path.empty()) {
-#if 1
-                image[y][x][0] += (path[0].localSurface.normal[0] * 0.5f + 0.5f);
-                image[y][x][1] += (path[0].localSurface.normal[1] * 0.5f + 0.5f);
-                image[y][x][2] += (path[0].localSurface.normal[2] * 0.5f + 0.5f);
-#else
-                d5b::SpectralVector f = {0.0, 0.0, 0.0, 0.0};
-                path[0].evaluateBSDF(path[0].pathOmegaO, d5b::Vector3(1, 1, 1), f);
-                image[y][x][0] = uint8_t(255 * f[0]);
-                image[y][x][1] = uint8_t(255 * f[0]);
-                image[y][x][2] = uint8_t(255 * f[0]);
-#endif
-              }
-              return sampleIndex > 16 ? d5b::Status::Done : d5b::Status::NotDone;
-            };
+          problem.acceptPathContribution = [=, this, sampleIndex = std::make_shared<size_t>(0)](
+                                             const std::vector<d5b::Vertex> &path, const d5b::SpectralVector &radiance) {
+            if (!path.empty()) {
+              image[y][x][0] += (path[0].localSurface.normal[0] * 0.5f + 0.5f);
+              image[y][x][1] += (path[0].localSurface.normal[1] * 0.5f + 0.5f);
+              image[y][x][2] += (path[0].localSurface.normal[2] * 0.5f + 0.5f);
+            }
+            return (*sampleIndex)++ > 16 ? d5b::Status::Done : d5b::Status::NotDone;
+          };
           return problem;
         });
       }

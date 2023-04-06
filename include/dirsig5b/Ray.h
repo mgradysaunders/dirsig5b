@@ -45,6 +45,23 @@ public:
 
   /// The current medium.
   const Medium *medium{nullptr};
+
+  struct Derivatives {
+    /// The derivative of the origin with respect to X.
+    Vector3 orgDerivWrtX;
+
+    /// The derivative of the origin with respect to Y.
+    Vector3 orgDerivWrtY;
+
+    /// The derivative of the direction with respect to X.
+    Vector3 dirDerivWrtX;
+
+    /// The derivative of the direction with respect to Y.
+    Vector3 dirDerivWrtY;
+  };
+
+  /// The derivatives with respect to the image plane if applicable.
+  std::optional<Derivatives> derivatives{};
 };
 
 } // namespace d5b

@@ -61,4 +61,6 @@ public:
   SpectralVector pathThroughput;
 };
 
+using Path = std::vector<Vertex>;
+
 } // namespace d5b
