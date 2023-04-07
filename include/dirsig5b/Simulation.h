@@ -7,15 +7,16 @@
 
 namespace d5b {
 
-class D5B_API Simulation {
+class D5B_API Simulation final {
+public:
+  void simulate();
+
+  void simulate(Problem problem);
+
 public:
   Sensor *sensor{nullptr};
 
   const World *world{nullptr};
-
-  void simulate();
-
-  void simulate(Problem problem);
 };
 
 } // namespace d5b
