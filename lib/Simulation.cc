@@ -18,15 +18,25 @@ void Simulation::simulate() {
 
 void Simulation::simulate(Problem problem) {
   Random random{problem.seed};
+  std::vector<DirectLight> directLights;
+  directLights.reserve(16);
   std::vector<Vertex> path;
   path.reserve(16);
+  SpectralVector wavelength{problem.wavelength};
+  SpectralVector throughput{problem.throughput};
+  SpectralVector radiance{wavelength.shape};
+  SpectralVector emission{wavelength.shape};
+  SpectralVector direct{wavelength.shape};
   for (size_t sampleIndex = 0; true; sampleIndex++) {
     path.clear();
-    SpectralVector wavelength{problem.wavelength};
-    SpectralVector throughput{problem.throughput};
-    SpectralVector radiance{wavelength.shape};
     Ray ray{problem.sampleRay(random)};
     ray.medium = world->mediumLookup(ray.org);
+
+    // Reset things.
+    throughput.assign(problem.throughput);
+    radiance = 0;
+    emission = 0;
+    direct = 0;
 
     for (size_t bounceIndex = 0; problem.bounceLimit == 0 || bounceIndex < problem.bounceLimit; bounceIndex++) {
       Vertex vertex;
@@ -69,26 +79,33 @@ void Simulation::simulate(Problem problem) {
       // 1. Sample direct lights, then add to the radiance estimate.
       // 2. Sample scattered direction and accumulate throughput.
       if (vertex.scattering) [[likely]] {
-#if 0
-        if (estimatorIn.minBounces <= bounces && bounces <= estimatorIn.bounceLimit) {
-          for (int i = 0; i < 16; i++) {
-            auto lightLoc = light->model->renderMesh.areaSample(random);
-            auto lightRay = mi::Ray3f(pathVert.location.point, lightLoc.point - pathVert.location.point, 1e-3f, 0.99f);
-            Color value = pathVert.scatter(mi::fastNormalize(lightRay.direction));
-            float valuePDF = light->model->renderMesh.solidAnglePDF(pathVert.location.point, lightLoc);
-            value /= valuePDF;
-            value *= pathVert.throughput / sampleIndex;
-            mi::render::TriangleMesh::Location tmpLocation;
-            if (mi::isfinite(value).all() && (value > 0).any() && !rayTest(lightRay, tmpLocation))
-              color +=
-                value * light->emission->emission(lightLoc.shading.localToWorld(), mi::fastNormalize(-lightRay.direction));
+
+        // Sample direct lights for the vertex.
+        directLights.clear(), world->directLightsForVertex(random, vertex, wavelength, directLights);
+        for (const auto &[sampleSolidAngleEmission, numSubSamples] : directLights) {
+          for (size_t subSample = 0; subSample < numSubSamples; subSample++) {
+            Vector3 omegaO{vertex.pathOmegaO};
+            Vector3 omegaI{0};
+            double shadowDistance{0};
+            if (double p = numSubSamples * sampleSolidAngleEmission(random, vertex.position, omegaI, shadowDistance, emission);
+                isFiniteAndPositive(p)) {
+              vertex.evaluateBSDF(omegaO, omegaI, direct);
+              direct *= (1 / p) * emission * throughput;
+              if (isFiniteAndPositive(direct)) {
+                LocalSurface localSurface;
+                if (
+                  !(shadowDistance > 0) ||
+                  !world->intersect(random, Ray{vertex.position, omegaI, 1e-5, shadowDistance}, localSurface)) {
+                  radiance += direct;
+                }
+              }
+            }
           }
         }
-#endif
-        throughput = 1;
-        if (double p = vertex.importanceSample(random, vertex.pathOmegaO, vertex.pathOmegaI, throughput);
-            !(p > 0 && mi::isfinite(p)))
-          break;
+
+        // Sample next direction.
+        throughput = 1.0;
+        if (!isFiniteAndPositive(vertex.importanceSample(random, vertex.pathOmegaO, vertex.pathOmegaI, throughput))) break;
         throughput *= vertex.pathThroughput;
       }
 
@@ -101,6 +118,7 @@ void Simulation::simulate(Problem problem) {
 
       // Add the vertex to the path.
       path.emplace_back(std::move(vertex));
+      break;
     }
     if (problem.acceptPathContribution(path, radiance) == Status::Done) break;
   }

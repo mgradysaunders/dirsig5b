@@ -24,6 +24,12 @@ public:
   Ray &withTransform(const Transform &transform) noexcept {
     org = transform.applyForward(Transform::Rule::Affine, org);
     dir = transform.applyForward(Transform::Rule::Linear, dir);
+    if (derivatives) {
+      derivatives->orgDerivWrtX = transform.applyForward(Transform::Rule::Linear, derivatives->orgDerivWrtX);
+      derivatives->orgDerivWrtY = transform.applyForward(Transform::Rule::Linear, derivatives->orgDerivWrtY);
+      derivatives->dirDerivWrtX = transform.applyForward(Transform::Rule::Linear, derivatives->dirDerivWrtX);
+      derivatives->dirDerivWrtY = transform.applyForward(Transform::Rule::Linear, derivatives->dirDerivWrtY);
+    }
     return *this;
   }
 

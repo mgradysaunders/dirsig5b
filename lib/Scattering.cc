@@ -1,10 +1,11 @@
+#include <iostream>
 #include "dirsig5b/Scattering.h"
 
 #include <Microcosm/Render/Phase>
 
 namespace d5b {
 
-void Scattering::initializeHenyeyGreenstein(double meanCosine) {
+void Scattering::setHenyeyGreenstein(double meanCosine) {
   auto phase{mi::render::HenyeyGreensteinPhase(meanCosine)};
   *this = Scattering{
     [=](Vector3 omegaO, Vector3 omegaI, SpectralVector &f) { f = phase.phase(omegaO, omegaI); },
@@ -14,7 +15,7 @@ void Scattering::initializeHenyeyGreenstein(double meanCosine) {
     }};
 }
 
-void Scattering::initializeLambertian(double fractionR, double fractionT) {
+void Scattering::setLambertian(double fractionR, double fractionT) {
   double weightR = fractionR / (fractionR + fractionT);
   double weightT = fractionT / (fractionR + fractionT);
   *this = Scattering{
@@ -44,7 +45,7 @@ void Scattering::initializeLambertian(double fractionR, double fractionT) {
     }};
 }
 
-void Scattering::initializeLinearCombination(std::vector<std::pair<double, Scattering>> weightAndTerm) {
+void Scattering::setLinearMixture(std::vector<std::pair<double, Scattering>> weightAndTerm) {
   double factor{0};
   for (auto &[weight, term] : weightAndTerm) weight = mi::max(weight, 0), factor += weight;
   for (auto &[weight, term] : weightAndTerm) weight /= factor;
@@ -70,7 +71,7 @@ void Scattering::initializeLinearCombination(std::vector<std::pair<double, Scatt
       size_t i = 0;
       for (const auto &[weight, term] : *sharedWeightAndTerm) {
         if (u <= weight || i + 1 == sharedWeightAndTerm->size()) {
-          if (double p = term.importanceSample(random, omegaO, omegaI, beta); !(p > 0 && mi::isfinite(p))) {
+          if (!isFiniteAndPositive(term.importanceSample(random, omegaO, omegaI, beta))) {
             return 0;
           }
           break;
@@ -93,27 +94,19 @@ void Scattering::initializeLinearCombination(std::vector<std::pair<double, Scatt
     }};
 }
 
-#if 0
-void Scattering::addTransform(const Transform &transform) {
+void Scattering::multiply(SpectralVector fraction) {
+  auto sharedFraction{std::make_shared<SpectralVector>(std::move(fraction))};
   *this = Scattering{
-    [transform, evaluateBSDF = std::move(evaluateBSDF)](Vector3 omegaO, Vector3 omegaI, SpectralVector &f) {
-      omegaO = fastNormalize(transform.applyForward(Transform::Rule::Linear, omegaO));
-      omegaI = fastNormalize(transform.applyForward(Transform::Rule::Linear, omegaI));
-      evaluateBSDF(omegaO, omegaI, f);
+    [sharedFraction, evaluateBSDF = std::move(evaluateBSDF)](Vector3 omegaO, Vector3 omegaI, SpectralVector &f) {
+      evaluateBSDF(omegaO, omegaI, f), f *= (*sharedFraction);
     },
-    [transform, evaluatePDF = std::move(evaluatePDF)](Vector3 omegaO, Vector3 omegaI) -> double {
-      omegaO = fastNormalize(transform.applyForward(Transform::Rule::Linear, omegaO));
-      omegaI = fastNormalize(transform.applyForward(Transform::Rule::Linear, omegaI));
-      return evaluatePDF(omegaO, omegaI);
-    },
-    [transform, importanceSample = std::move(importanceSample)](
+    std::move(evaluatePDF),
+    [sharedFraction, importanceSample = std::move(importanceSample)](
       Random &random, Vector3 omegaO, Vector3 &omegaI, SpectralVector &beta) -> double {
-      omegaO = fastNormalize(transform.applyForward(Transform::Rule::Linear, omegaO));
       double p = importanceSample(random, omegaO, omegaI, beta);
-      omegaI = fastNormalize(transform.applyInverse(Transform::Rule::Linear, omegaI));
+      beta *= (*sharedFraction);
       return p;
     }};
 }
-#endif
 
 } // namespace d5b
