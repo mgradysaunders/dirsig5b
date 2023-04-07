@@ -118,7 +118,6 @@ void Simulation::simulate(Problem problem) {
 
       // Add the vertex to the path.
       path.emplace_back(std::move(vertex));
-      break;
     }
     if (problem.acceptPathContribution(path, radiance) == Status::Done) break;
   }
