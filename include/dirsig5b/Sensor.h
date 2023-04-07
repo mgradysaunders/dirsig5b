@@ -26,7 +26,9 @@ class D5B_API Sensor {
 public:
   virtual ~Sensor() = default;
 
-  [[nodiscard]] virtual Status recordProblemRequests(std::vector<ProblemRequest> &problemRequests) = 0;
+  virtual void request(std::vector<ProblemRequest> &problemRequests) = 0;
+
+  [[nodiscard]] virtual Status finish() { return Status::Done; }
 };
 
 } // namespace d5b

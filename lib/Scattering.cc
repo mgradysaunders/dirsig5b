@@ -1,4 +1,3 @@
-#include <iostream>
 #include "dirsig5b/Scattering.h"
 
 #include <Microcosm/Render/Phase>
@@ -15,7 +14,7 @@ void Scattering::setHenyeyGreenstein(double meanCosine) {
     }};
 }
 
-void Scattering::setLambertian(double fractionR, double fractionT) {
+void Scattering::setLambertDiffuse(double fractionR, double fractionT) {
   double weightR = fractionR / (fractionR + fractionT);
   double weightT = fractionT / (fractionR + fractionT);
   *this = Scattering{

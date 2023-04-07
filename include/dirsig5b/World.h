@@ -24,6 +24,12 @@ public:
 
   [[nodiscard]] virtual bool intersect(Random &random, Ray ray, LocalSurface &localSurface) const = 0;
 
+  // TODO Visibility instead of boolean
+  [[nodiscard]] virtual bool intersect(Random &random, Ray ray) const {
+    LocalSurface localSurface;
+    return intersect(random, ray, localSurface);
+  }
+
   virtual void directLightsForVertex(
     Random &random, const Vertex &vertex, const SpectralVector &wavelength, std::vector<DirectLight> &directLights) const = 0;
 };

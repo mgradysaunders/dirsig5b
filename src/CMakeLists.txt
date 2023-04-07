@@ -4,4 +4,4 @@ add_executable(
   World.cc
   main.cc
   )
-target_link_libraries(example PRIVATE dirsig5b)
+target_link_libraries(example PRIVATE dirsig5b Microcosm::stbi)

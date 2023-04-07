@@ -10,6 +10,9 @@ class World final : public d5b::World {
 public:
   [[nodiscard]] bool intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSurface &localSurface) const override;
 
+  // TODO Visibility instead of boolean.
+  [[nodiscard]] bool intersect(d5b::Random &random, d5b::Ray ray) const override;
+
   void directLightsForVertex(
     d5b::Random &random,
     const d5b::Vertex &vertex,

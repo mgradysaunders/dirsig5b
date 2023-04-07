@@ -1,5 +1,8 @@
 #include "dirsig5b/Simulation.h"
 
+#include <iostream>
+#include <omp.h>
+
 namespace d5b {
 
 void Simulation::simulate() {
@@ -7,12 +10,12 @@ void Simulation::simulate() {
   while (true) {
     problemRequests.clear();
     problemRequests.reserve(512);
-    Status status{sensor->recordProblemRequests(problemRequests)};
-#pragma omp parallel for
-    for (const ProblemRequest &problemRequest : problemRequests) {
+    sensor->request(problemRequests);
+#pragma omp parallel for num_threads(100) schedule(dynamic)
+    for (const auto &problemRequest : problemRequests) {
       simulate(problemRequest());
     }
-    if (status == Status::Done) break;
+    if (sensor->finish() == Status::Done) break;
   }
 }
 
@@ -43,6 +46,7 @@ void Simulation::simulate(Problem problem) {
       bool hitSurface = world->intersect(random, ray, vertex.localSurface);
       bool hitVolume = ray.medium && ray.medium->intersect(random, ray, vertex.localVolume);
       if (!hitVolume && !hitSurface) {
+        radiance += throughput * 0.1;
         // Escaped!
         break;
       } else if (hitVolume) {
@@ -92,10 +96,8 @@ void Simulation::simulate(Problem problem) {
               vertex.evaluateBSDF(omegaO, omegaI, direct);
               direct *= (1 / p) * emission * throughput;
               if (isFiniteAndPositive(direct)) {
-                LocalSurface localSurface;
-                if (
-                  !(shadowDistance > 0) ||
-                  !world->intersect(random, Ray{vertex.position, omegaI, 1e-5, shadowDistance}, localSurface)) {
+                // TODO Visibility instead of boolean.
+                if (!(shadowDistance > 0) || !world->intersect(random, Ray{vertex.position, omegaI, 1e-5, shadowDistance})) {
                   radiance += direct;
                 }
               }

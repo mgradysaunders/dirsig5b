@@ -58,7 +58,17 @@ public:
   void setHenyeyGreenstein(double meanCosine);
 
   /// Initialize as Lambertian BSDF with the given reflectance and transmittance.
-  void setLambertian(double fractionR, double fractionT);
+  void setLambertDiffuse(double fractionR, double fractionT);
+
+  void setDisneyDiffuse(
+    std::variant<double, SpectralVector> lambert,
+    std::variant<double, SpectralVector> retro,
+    std::variant<double, SpectralVector> sheen,
+    std::variant<double, SpectralVector> roughness);
+
+  void setOrenNayarDiffuse(
+    std::variant<double, SpectralVector> lambert, //
+    std::variant<double, SpectralVector> roughness);
 
   /// Initialize as linear mixture of other scattering functions.
   void setLinearMixture(std::vector<std::pair<double, Scattering>> weightAndTerm);
