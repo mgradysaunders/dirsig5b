@@ -4,7 +4,8 @@
 
 class Sensor final : public d5b::Sensor {
 public:
-  Sensor() { image.resize(1024, 1024, 3); }
+
+  Sensor() { image.resize(dim, dim, 3); }
 
   void request(std::vector<d5b::ProblemRequest> &problemRequests) override;
 
@@ -14,6 +15,8 @@ public:
   mi::Tensor<float, mi::TensorShape<mi::Dynamic, mi::Dynamic, mi::Dynamic>> image;
 
   d5b::Random seeds;
+
+  size_t dim{2048};
 
   size_t count{0};
 };

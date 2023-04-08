@@ -46,8 +46,10 @@ void Simulation::simulate(Problem problem) {
       bool hitSurface = world->intersect(random, ray, vertex.localSurface);
       bool hitVolume = ray.medium && ray.medium->intersect(random, ray, vertex.localVolume);
       if (!hitVolume && !hitSurface) {
-        radiance += throughput * 0.1;
         // Escaped!
+        // TODO Invoke world
+        for (size_t i = 0; i < wavelength.size(); i++)
+          radiance[i] += 1.0 * mi::normalizedBlackbodyRadiance(9000.0, wavelength[i]) * throughput[i];
         break;
       } else if (hitVolume) {
         // Initialize volume vertex.
@@ -109,6 +111,7 @@ void Simulation::simulate(Problem problem) {
         throughput = 1.0;
         if (!isFiniteAndPositive(vertex.importanceSample(random, vertex.pathOmegaO, vertex.pathOmegaI, throughput))) break;
         throughput *= vertex.pathThroughput;
+        if (!(throughput > 1e-8).all()) break;
       }
 
       // Update the ray.
