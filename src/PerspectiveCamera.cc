@@ -37,10 +37,25 @@ void PerspectiveCamera::request(std::vector<d5b::ProblemRequest> &problemRequest
           ray.dir[1] = ((pixelY + uY) / double(this->sizeY) - 0.5) * -1;
           ray.dir[2] = -this->cache.focalLength;
           ray.dir = mi::fastNormalize(ray.dir);
-          d5b::Vector3 focus = ray.org + 800 * ray.dir / mi::abs(ray.dir[2]);
-          ray.org[0] += 10 * (d5b::generateCanonical<double>(random) - 0.5);
-          ray.org[1] += 10 * (d5b::generateCanonical<double>(random) - 0.5);
-          ray.dir = mi::normalize(focus - ray.org);
+          if (this->dofRadius > 0) {
+            d5b::Vector3 focus = ray.org + this->dofDistance / mi::abs(ray.dir[2]) * ray.dir;
+            d5b::Vector2 shift;
+            if (this->dofApertureBlades < 3) {
+              shift = mi::uniformDiskSample<double>(random);
+            } else {
+              size_t t = random(this->dofApertureBlades - 2) + 1;
+              double angleB = 2 * d5b::Pi * double(t + 0) / double(this->dofApertureBlades);
+              double angleC = 2 * d5b::Pi * double(t + 1) / double(this->dofApertureBlades);
+              mi::Triangle2d triangle = {
+                mi::Vector2d(1, 0),                             //
+                mi::Vector2d(mi::cos(angleB), mi::sin(angleB)), //
+                mi::Vector2d(mi::cos(angleC), mi::sin(angleC))};
+              shift = triangle.areaSample(random).point;
+            }
+            ray.org[0] += this->dofRadius * shift[0];
+            ray.org[1] += this->dofRadius * shift[1];
+            ray.dir = mi::normalize(focus - ray.org);
+          }
           return ray.withTransform(localToWorld);
         };
         struct AcceptPathContribution {

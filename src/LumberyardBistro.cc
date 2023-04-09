@@ -1,5 +1,6 @@
 #include "LumberyardBistro.h"
 
+#include <Microcosm/Render/ConvertRGB>
 #include <Microcosm/Render/Illuminant>
 #include <Microcosm/Render/Microsurface>
 #include <filesystem>
@@ -53,7 +54,7 @@ bool LumberyardBistro::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSu
     localSurface.texcoord = location.shading.texcoord;
     localSurface.tangents[0] = location.shading.tangents.col(0);
     localSurface.tangents[1] = location.shading.tangents.col(1);
-    localSurface.normal = location.shading.normal;
+    localSurface.normal = mi::normalize(location.shading.normal);
     auto texcoord = location.shading.texcoord;
     auto itr = texturesForMaterial.find(materialIndex);
 #if 1
@@ -65,11 +66,7 @@ bool LumberyardBistro::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSu
         normal(y, x, 0) * (1.0 / 255.0) * 2 - 1, //
         normal(y, x, 1) * (1.0 / 255.0) * 2 - 1, //
         normal(y, x, 2) * (1.0 / 255.0) * 2 - 1};
-      localNormal = mi::fastNormalize(localNormal);
-      localSurface.normal = mi::fastNormalize(
-        location.shading.normal * localNormal[2] +                             //
-        mi::fastNormalize(location.shading.tangents.col(0)) * localNormal[0] + //
-        mi::fastNormalize(location.shading.tangents.col(1)) * localNormal[1]);
+      localSurface.normal = mi::normalize(mi::dot(localSurface.localToWorld(), localNormal));
     }
 #endif
     mi::Vector4d color{1, 1, 1, 1};
@@ -94,14 +91,7 @@ bool LumberyardBistro::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSu
     localSurface.scatteringProvider = [&, itr, color](const d5b::SpectralVector &wavelength, d5b::Scattering &scattering) {
       auto colorToSpectrum = [&](mi::Vector3d c) {
         d5b::SpectralVector spectrum{wavelength.shape};
-        for (size_t i = 0; i < wavelength.size(); i++) {
-          spectrum[i] = 0;
-        }
-        for (size_t i = 0; i < wavelength.size(); i++) {
-          spectrum[i] += c[0] * std::exp(-mi::sqr((wavelength[i] - 0.65) / 0.06));
-          spectrum[i] += c[1] * std::exp(-mi::sqr((wavelength[i] - 0.55) / 0.06));
-          spectrum[i] += c[2] * std::exp(-mi::sqr((wavelength[i] - 0.45) / 0.06));
-        }
+        for (size_t i = 0; i < wavelength.size(); i++) spectrum[i] = mi::render::ConvertRGBToAlbedo(c, wavelength[i]);
         return spectrum;
       };
       if (itr != texturesForMaterial.end() && itr->second.isMetal) {
@@ -195,10 +185,12 @@ void LumberyardBistro::directLightsForVertex(
     sun.importanceSampleSolidAngle = [emission = std::move(emission)](
                                        d5b::Random &random, d5b::Vector3, d5b::Vector3 &direction, double &distance,
                                        d5b::SpectralVector &emissionOut) -> double {
-      direction = d5b::normalize(d5b::Vector3(-1, 3, 1));
+      mi::Vector3d sunDirection = mi::normalize(mi::Vector3d(-1, 3, 1));
+      mi::Matrix3d sunBasis = mi::Matrix3d::orthonormalBasis(sunDirection);
+      direction = mi::dot(sunBasis, mi::uniformConeSample<double>(0.9999, random));
       distance = d5b::Inf;
       emissionOut.assign(emission);
-      return 1;
+      return 1; // mi::uniformConePDF<double>(0.999);
     };
   }
 }

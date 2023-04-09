@@ -45,7 +45,6 @@ using mi::signbit;
 using mi::Slice;
 
 [[nodiscard]] inline bool isFiniteAndPositive(double x) noexcept { return x > 0 && mi::isfinite(x); }
-
 [[nodiscard]] inline bool isFiniteAndPositive(const SpectralVector &v) noexcept {
   return (v > 0).any() && mi::isfinite(v).all();
 }

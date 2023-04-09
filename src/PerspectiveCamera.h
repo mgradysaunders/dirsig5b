@@ -31,6 +31,12 @@ public:
 
   double fovY{60.0_degrees};
 
+  double dofRadius{0};
+
+  double dofDistance{1000};
+
+  size_t dofApertureBlades{5};
+
   size_t maxBounces{5};
 
   size_t maxSamples{256};
