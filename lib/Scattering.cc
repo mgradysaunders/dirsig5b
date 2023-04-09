@@ -1,5 +1,6 @@
 #include "dirsig5b/Scattering.h"
 
+#include <Microcosm/Render/DiffuseModels>
 #include <Microcosm/Render/Phase>
 
 namespace d5b {
@@ -42,6 +43,28 @@ void Scattering::setLambertDiffuse(double fractionR, double fractionT) {
         return weightT * OneOverPi * abs(omegaI[2]);
       }
     }};
+}
+
+void Scattering::setDisneyDiffuse(double roughness, double lambert, double retro, double sheen) {
+  setLambertDiffuse(1, 0);
+  evaluateBSDF = [=](Vector3 omegaO, Vector3 omegaI, SpectralVector &f) {
+    if (signbit(omegaO[2]) == signbit(omegaI[2])) {
+      f = mi::render::DisneyDiffuseBRDF{roughness, lambert, retro, sheen}.scatter(omegaO, omegaI);
+    } else {
+      f = 0;
+    }
+  };
+}
+
+void Scattering::setOrenNayarDiffuse(double sigma) {
+  setLambertDiffuse(1, 0);
+  evaluateBSDF = [=](Vector3 omegaO, Vector3 omegaI, SpectralVector &f) {
+    if (signbit(omegaO[2]) == signbit(omegaI[2])) {
+      f = mi::render::OrenNayarBRDF{sigma}.scatter(omegaO, omegaI);
+    } else {
+      f = 0;
+    }
+  };
 }
 
 void Scattering::setLinearMixture(std::vector<std::pair<double, Scattering>> weightAndTerm) {

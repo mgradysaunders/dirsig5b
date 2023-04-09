@@ -5,6 +5,7 @@ add_library(
   LocalVolume.cc
   Scattering.cc
   Simulation.cc
+  World.cc
   )
 target_include_directories(
   dirsig5b 

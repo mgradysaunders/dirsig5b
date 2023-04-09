@@ -29,6 +29,7 @@ void Simulation::simulate(Problem problem) {
   SpectralVector throughput{problem.throughput};
   SpectralVector radiance{wavelength.shape};
   SpectralVector emission{wavelength.shape};
+  SpectralVector transmission{wavelength.shape};
   SpectralVector direct{wavelength.shape};
   for (size_t sampleIndex = 0; true; sampleIndex++) {
     path.clear();
@@ -39,17 +40,17 @@ void Simulation::simulate(Problem problem) {
     throughput.assign(problem.throughput);
     radiance = 0;
     emission = 0;
+    transmission = 0;
     direct = 0;
 
-    for (size_t bounceIndex = 0; problem.bounceLimit == 0 || bounceIndex < problem.bounceLimit; bounceIndex++) {
+    for (size_t bounceIndex = 0; problem.maxBounces == 0 || bounceIndex < problem.maxBounces; bounceIndex++) {
       Vertex vertex;
       bool hitSurface = world->intersect(random, ray, vertex.localSurface);
       bool hitVolume = ray.medium && ray.medium->intersect(random, ray, vertex.localVolume);
       if (!hitVolume && !hitSurface) {
-        // Escaped!
-        // TODO Invoke world
-        for (size_t i = 0; i < wavelength.size(); i++)
-          radiance[i] += 1.0 * mi::normalizedBlackbodyRadiance(9000.0, wavelength[i]) * throughput[i];
+        emission = 0;
+        world->infiniteLightContributionForEscapedRay(random, ray, wavelength, emission);
+        radiance += throughput * emission;
         break;
       } else if (hitVolume) {
         // Initialize volume vertex.
@@ -88,36 +89,49 @@ void Simulation::simulate(Problem problem) {
 
         // Sample direct lights for the vertex.
         directLights.clear(), world->directLightsForVertex(random, vertex, wavelength, directLights);
-        for (const auto &[sampleSolidAngleEmission, numSubSamples] : directLights) {
-          for (size_t subSample = 0; subSample < numSubSamples; subSample++) {
+        for (const auto &directLight : directLights) {
+          for (size_t subSample = 0; subSample < directLight.numSubSamples; subSample++) {
+            // Invoke the light solid-angle sampling routine.
             Vector3 omegaO{vertex.pathOmegaO};
             Vector3 omegaI{0};
             double shadowDistance{0};
-            if (double p = numSubSamples * sampleSolidAngleEmission(random, vertex.position, omegaI, shadowDistance, emission);
-                isFiniteAndPositive(p)) {
+            double solidAngleDensity{
+              directLight.numSubSamples *
+              directLight.importanceSampleSolidAngle(random, vertex.position, omegaI, shadowDistance, emission)};
+            if (isFiniteAndPositive(solidAngleDensity)) {
+              // The probability density of the sample is legitimate, so evaluate the BSDF and account for
+              // all terms except for transmission/shadowing. There is a chance the BSDF evaluates to zero
+              // due to reflection/transmission mismatch at the surface, which would allow us to skip
+              // tracing the shadow ray, which is almost always the most expensive.
               vertex.evaluateBSDF(omegaO, omegaI, direct);
-              direct *= (1 / p) * emission * throughput;
+              direct *= (1 / solidAngleDensity) * emission * throughput;
               if (isFiniteAndPositive(direct)) {
-                // TODO Visibility instead of boolean.
-                if (!(shadowDistance > 0) || !world->intersect(random, Ray{vertex.position, omegaI, 1e-5, shadowDistance})) {
-                  radiance += direct;
-                }
+                // The solid-angle density combined with the emission, BSDF, and current path throughput
+                // is still legitimate and non-zero. Now construct and trace the shadow ray, then add the
+                // result to the current path radiance.
+                transmission = 1;
+                Ray shadowRay{ray};
+                shadowRay.org = vertex.position;
+                shadowRay.dir = omegaI;
+                shadowRay.minParam = 1e-5;
+                shadowRay.maxParam = shadowDistance;
+                if (world->isVisible(random, shadowRay, wavelength, transmission)) radiance += transmission * direct;
               }
             }
           }
         }
 
         // Sample next direction.
-        throughput = 1.0;
+        throughput = 1;
         if (!isFiniteAndPositive(vertex.importanceSample(random, vertex.pathOmegaO, vertex.pathOmegaI, throughput))) break;
         throughput *= vertex.pathThroughput;
-        if (!(throughput > 1e-8).all()) break;
+        if (!(throughput > 1e-6).any()) break;
       }
 
       // Update the ray.
       ray.org = vertex.position;
       ray.dir = vertex.pathOmegaI;
-      ray.minParam = 1e-5;
+      ray.minParam = 1e-3;
       ray.maxParam = Inf;
       ray.derivatives = {}; // Ignore derivatives after the first bounce.
 

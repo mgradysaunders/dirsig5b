@@ -9,7 +9,7 @@ class D5B_API Problem final {
 public:
   size_t seed{0};
 
-  size_t bounceLimit{0};
+  size_t maxBounces{0};
 
   SpectralVector wavelength;
 

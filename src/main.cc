@@ -1,16 +1,18 @@
-#include "Sensor.h"
-#include "World.h"
+#include "LumberyardBistro.h"
+#include "PerspectiveCamera.h"
 #include "dirsig5b/Simulation.h"
 
 #include <iostream>
 
 int main() {
-  Sensor sensor;
-  World world;
-  world.initialize();
+  PerspectiveCamera perspectiveCamera;
+  perspectiveCamera.localToWorld = d5b::DualQuaternion::translate({0, 400, 1000});
+  perspectiveCamera.initialize();
+  LumberyardBistro lumberyardBistro;
+  lumberyardBistro.initialize();
   d5b::Simulation simulation{};
-  simulation.sensor = &sensor;
-  simulation.world = &world;
+  simulation.sensor = &perspectiveCamera;
+  simulation.world = &lumberyardBistro;
   simulation.simulate();
   return 0;
 }

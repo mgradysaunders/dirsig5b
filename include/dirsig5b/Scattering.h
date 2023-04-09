@@ -60,15 +60,9 @@ public:
   /// Initialize as Lambertian BSDF with the given reflectance and transmittance.
   void setLambertDiffuse(double fractionR, double fractionT);
 
-  void setDisneyDiffuse(
-    std::variant<double, SpectralVector> lambert,
-    std::variant<double, SpectralVector> retro,
-    std::variant<double, SpectralVector> sheen,
-    std::variant<double, SpectralVector> roughness);
+  void setDisneyDiffuse(double roughness, double lambert, double retro, double sheen);
 
-  void setOrenNayarDiffuse(
-    std::variant<double, SpectralVector> lambert, //
-    std::variant<double, SpectralVector> roughness);
+  void setOrenNayarDiffuse(double sigma);
 
   /// Initialize as linear mixture of other scattering functions.
   void setLinearMixture(std::vector<std::pair<double, Scattering>> weightAndTerm);

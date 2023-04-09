@@ -47,9 +47,7 @@ using mi::Slice;
 [[nodiscard]] inline bool isFiniteAndPositive(double x) noexcept { return x > 0 && mi::isfinite(x); }
 
 [[nodiscard]] inline bool isFiniteAndPositive(const SpectralVector &v) noexcept {
-  for (double x : v)
-    if (!isFiniteAndPositive(x)) return false;
-  return true;
+  return (v > 0).any() && mi::isfinite(v).all();
 }
 
 } // namespace d5b
