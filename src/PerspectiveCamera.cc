@@ -93,7 +93,7 @@ d5b::Status PerspectiveCamera::finish() {
         color[2] += mi::wymanFit1931Z(wavelength) * radiance;
       }
       color = mi::convertXYZToRGB(color);
-      color = mi::encodeSRGB(mi::Vector3d(4 * color));
+      color = mi::encodeSRGB(mi::Vector3d(1 * color));
       imageU8(pixelY, pixelX, mi::Slice()).assign(255 * color);
     }
   }

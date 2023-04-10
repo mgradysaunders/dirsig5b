@@ -57,7 +57,6 @@ bool LumberyardBistro::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSu
     localSurface.normal = mi::normalize(location.shading.normal);
     auto texcoord = location.shading.texcoord;
     auto itr = texturesForMaterial.find(materialIndex);
-#if 1
     if (itr != texturesForMaterial.end() && itr->second.normal) {
       auto &normal = *itr->second.normal;
       int y = normal.size(0) * (1 - mi::fract(texcoord[1]));
@@ -68,7 +67,6 @@ bool LumberyardBistro::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSu
         normal(y, x, 2) * (1.0 / 255.0) * 2 - 1};
       localSurface.normal = mi::normalize(mi::dot(localSurface.localToWorld(), localNormal));
     }
-#endif
     mi::Vector4d color{1, 1, 1, 1};
     if (itr != texturesForMaterial.end() && itr->second.albedo) {
       auto &albedo = *itr->second.albedo;
@@ -79,6 +77,8 @@ bool LumberyardBistro::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSu
       color[2] = mi::decodeSRGB(albedo(y, x, 2) * (1.0 / 255.0));
       color[3] = 1;
     }
+#define DIRSIG_STYLE 0
+#if !DIRSIG_STYLE
     if (itr != texturesForMaterial.end() && itr->second.opacity) {
       auto &opacity = *itr->second.opacity;
       int y = opacity.size(0) * (1 - mi::fract(texcoord[1]));
@@ -88,12 +88,28 @@ bool LumberyardBistro::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSu
         return intersect(random, ray, localSurface);
       }
     }
+#endif
     localSurface.scatteringProvider = [&, itr, color](const d5b::SpectralVector &wavelength, d5b::Scattering &scattering) {
       auto colorToSpectrum = [&](mi::Vector3d c) {
         d5b::SpectralVector spectrum{wavelength.shape};
-        for (size_t i = 0; i < wavelength.size(); i++) spectrum[i] = mi::render::ConvertRGBToAlbedo(c, wavelength[i]);
+        for (size_t i = 0; i < wavelength.size(); i++) {
+#if DIRSIG_STYLE
+          spectrum[i] = 0;
+          if (0.6 <= wavelength[i] && wavelength[i] < 0.7) spectrum[i] += mi::encodeSRGB(c[0]);
+          if (0.5 <= wavelength[i] && wavelength[i] < 0.6) spectrum[i] += mi::encodeSRGB(c[1]);
+          if (0.4 <= wavelength[i] && wavelength[i] < 0.5) spectrum[i] += mi::encodeSRGB(c[2]);
+#else
+          spectrum[i] = mi::render::ConvertRGBToAlbedo(c, wavelength[i]);
+#endif
+        }
         return spectrum;
       };
+#if DIRSIG_STYLE
+      d5b::Scattering diffuse;
+      diffuse.setLambertDiffuse(0.8, 0);
+      diffuse.multiply(colorToSpectrum(color));
+      scattering = std::move(diffuse);
+#else
       if (itr != texturesForMaterial.end() && itr->second.isMetal) {
         mi::render::ConductiveMicrosurface microsurface;
         microsurface.roughness = {0.15, 0.15};
@@ -126,9 +142,9 @@ bool LumberyardBistro::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSu
       } else {
         d5b::Scattering diffuse;
         if (itr != texturesForMaterial.end() && (itr->second.isLeaf || itr->second.isCloth)) {
-          diffuse.setLambertDiffuse(0.333, 0.333);
+          diffuse.setLambertDiffuse(0.5, 0.5);
         } else {
-          diffuse.setDisneyDiffuse(0.3, 0.333, 0.2, 0.0);
+          diffuse.setDisneyDiffuse(0.3, 1.0, 0.2, 0.0);
         }
         diffuse.multiply(colorToSpectrum(color));
         mi::render::DielectricMicrosurface microsurface;
@@ -165,6 +181,7 @@ bool LumberyardBistro::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSu
           scattering = std::move(diffuse);
         }
       }
+#endif
     };
     return true;
   }
@@ -180,7 +197,7 @@ void LumberyardBistro::directLightsForVertex(
   {
     d5b::SpectralVector emission{wavelength.shape};
     for (size_t i = 0; i < wavelength.size(); i++)
-      emission[i] = mi::render::IlluminantD(mi::convertCCTToXY(5500.0f), wavelength[i]);
+      emission[i] = 0.8 * mi::render::IlluminantD(mi::convertCCTToXY(5004.0f), wavelength[i]);
     auto &sun = directLights.emplace_back();
     sun.importanceSampleSolidAngle = [emission = std::move(emission)](
                                        d5b::Random &random, d5b::Vector3, d5b::Vector3 &direction, double &distance,
@@ -198,6 +215,6 @@ void LumberyardBistro::directLightsForVertex(
 void LumberyardBistro::infiniteLightContributionForEscapedRay(
   d5b::Random &, d5b::Ray, const d5b::SpectralVector &wavelength, d5b::SpectralVector &emission) const {
   for (size_t i = 0; i < wavelength.size(); i++) {
-    emission[i] = 2 * mi::normalizedBlackbodyRadiance(9000.0, wavelength[i]);
+    emission[i] = 8 * mi::normalizedBlackbodyRadiance(12000.0, wavelength[i]);
   }
 }
