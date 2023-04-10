@@ -4,7 +4,7 @@
 
 #include <Microcosm/Timer>
 
-class PerspectiveCamera final : public d5b::Sensor {
+class Camera final : public d5b::Sensor {
 public:
   void initialize();
 
@@ -28,6 +28,8 @@ public:
   double wavelengthMin{0.4};
 
   double wavelengthMax{0.7};
+
+  double gain{2};
 
   double fovY{60.0_degrees};
 

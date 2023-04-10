@@ -1,7 +1,5 @@
-add_executable(
-  example
-  PerspectiveCamera.cc
-  LumberyardBistro.cc
-  main.cc
-  )
-target_link_libraries(example PRIVATE dirsig5b Microcosm::stbi)
+find_package(assimp REQUIRED)
+add_executable(bistro Camera.cc BistroWorld.cc)
+add_executable(forest Camera.cc ForestWorld.cc)
+target_link_libraries(bistro PRIVATE dirsig5b Microcosm::stbi)
+target_link_libraries(forest PRIVATE dirsig5b Microcosm::stbi assimp::assimp)

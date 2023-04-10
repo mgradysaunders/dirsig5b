@@ -1,10 +1,10 @@
-#include "PerspectiveCamera.h"
+#include "Camera.h"
 
 #include <Microcosm/stbi>
 #include <Microcosm/utility>
 #include <iostream>
 
-void PerspectiveCamera::initialize() {
+void Camera::initialize() {
   cache.seedSequence = d5b::Random(seed);
   cache.wavelength.resize(wavelengthCount);
   cache.throughput.resize(wavelengthCount);
@@ -19,7 +19,7 @@ void PerspectiveCamera::initialize() {
   buffer = 0;
 }
 
-void PerspectiveCamera::request(std::vector<d5b::ProblemRequest> &problemRequests) {
+void Camera::request(std::vector<d5b::ProblemRequest> &problemRequests) {
   problemRequests.reserve(sizeX * sizeY);
   for (size_t pixelY = 0; pixelY < sizeY; pixelY++)
     for (size_t pixelX = 0; pixelX < sizeX; pixelX++)
@@ -59,7 +59,7 @@ void PerspectiveCamera::request(std::vector<d5b::ProblemRequest> &problemRequest
           return ray.withTransform(localToWorld);
         };
         struct AcceptPathContribution {
-          PerspectiveCamera *self{};
+          Camera *self{};
           size_t pixelX{};
           size_t pixelY{};
           size_t numSamples{};
@@ -75,7 +75,7 @@ void PerspectiveCamera::request(std::vector<d5b::ProblemRequest> &problemRequest
       });
 }
 
-d5b::Status PerspectiveCamera::finish() {
+d5b::Status Camera::finish() {
   cache.numSamples += numSamplesPerBatch;
   using namespace mi::string_literals;
   std::cout << "Finished {}/{} samples!\n"_format(cache.numSamples, maxSamples);
@@ -93,7 +93,7 @@ d5b::Status PerspectiveCamera::finish() {
         color[2] += mi::wymanFit1931Z(wavelength) * radiance;
       }
       color = mi::convertXYZToRGB(color);
-      color = mi::encodeSRGB(mi::Vector3d(1 * color));
+      color = mi::encodeSRGB(mi::Vector3d(gain * color));
       imageU8(pixelY, pixelX, mi::Slice()).assign(255 * color);
     }
   }

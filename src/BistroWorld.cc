@@ -1,51 +1,55 @@
-#include "LumberyardBistro.h"
+#include "BistroWorld.h"
+#include "Camera.h"
 
 #include <Microcosm/Render/ConvertRGB>
 #include <Microcosm/Render/Illuminant>
+#include <Microcosm/Render/MeasuredConductor>
 #include <Microcosm/Render/Microsurface>
 #include <filesystem>
 #include <iostream>
 
-void LumberyardBistro::initialize() {
+void BistroWorld::initialize() {
   fileOBJ = mi::geometry::FileOBJ("/home/michael/Documents/Scenes/lumberyard-bistro/exterior.obj");
   fileMTL = mi::geometry::FileMTL("/home/michael/Documents/Scenes/lumberyard-bistro/exterior.mtl");
   mesh.buildFrom(mi::geometry::Mesh(fileOBJ), 2);
   for (int16_t materialIndex : mesh.materials) {
     if (texturesForMaterial.find(materialIndex) == texturesForMaterial.end()) {
       auto &textures = texturesForMaterial[materialIndex];
-      auto &material = fileMTL.materials.at(fileOBJ.metadata.materialNames.at(materialIndex));
+      auto &materialName = fileOBJ.metadata.materialNames.at(materialIndex);
+      auto &material = fileMTL.materials.at(materialName);
       auto load = [](const std::string &filename) -> mi::stbi::ImageU8 {
         auto path{std::filesystem::path("/home/michael/Documents/Scenes/lumberyard-bistro") / filename};
         std::cout << "Loading " << path.string() << "..." << std::endl;
         return mi::stbi::loadU8(path.string());
       };
+      auto name = mi::toLower(materialName);
+      if (name.find("metal") != std::string::npos) {
+        textures.kind = MaterialKind::Metal;
+      } else if (name.find("fabric") != std::string::npos) {
+        textures.kind = MaterialKind::Cloth;
+      } else if (
+        name.find("pavement") != std::string::npos || name.find("stone") != std::string::npos ||
+        name.find("concrete") != std::string::npos) {
+        textures.kind = MaterialKind::Pavement;
+      } else if (
+        name.find("leaf") != std::string::npos || name.find("leaves") != std::string::npos ||
+        name.find("flower") != std::string::npos) {
+        textures.kind = MaterialKind::Leaf;
+      } else if (name.find("wood") != std::string::npos) {
+        textures.kind = MaterialKind::Wood;
+      }
       if (material.ambientTexture) {
-        auto &filename = *material.ambientTexture;
-        textures.albedo = load(filename);
-        textures.isMetal = filename.find("Metal") != std::string::npos || //
-                           filename.find("metal") != std::string::npos;
-        textures.isCloth = filename.find("Fabric") != std::string::npos || //
-                           filename.find("fabric") != std::string::npos;
+        textures.albedo = load(*material.ambientTexture);
       } else if (material.diffuseTexture) {
-        auto &filename = *material.diffuseTexture;
-        textures.albedo = load(filename);
-        textures.isMetal = filename.find("Metal") != std::string::npos || //
-                           filename.find("metal") != std::string::npos;
-        textures.isCloth = filename.find("Fabric") != std::string::npos || //
-                           filename.find("fabric") != std::string::npos;
+        textures.albedo = load(*material.diffuseTexture);
       }
-      if (material.bumpTexture) {
-        textures.normal = load(*material.bumpTexture);
-      }
-      if (material.opacityTexture) {
-        textures.opacity = load(*material.opacityTexture);
-        textures.isLeaf = material.opacityTexture->find("Natural") != std::string::npos;
-      }
+      if (material.bumpTexture) textures.normal = load(*material.bumpTexture);
+      if (material.opacityTexture) textures.opacity = load(*material.opacityTexture);
     }
   }
 }
 
-bool LumberyardBistro::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSurface &localSurface) const {
+bool BistroWorld::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSurface &localSurface) const {
   mi::render::TriangleMesh::Location location;
   if (auto param = mesh.rayTest(mi::Ray3f(ray.org, ray.dir, ray.minParam, ray.maxParam), location)) {
     auto materialIndex = mesh.materials.at(location.index);
@@ -89,7 +93,9 @@ bool LumberyardBistro::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSu
       }
     }
 #endif
-    localSurface.scatteringProvider = [&, itr, color](const d5b::SpectralVector &wavelength, d5b::Scattering &scattering) {
+    MaterialKind kind = MaterialKind::Default;
+    if (itr != texturesForMaterial.end()) kind = itr->second.kind;
+    localSurface.scatteringProvider = [&, kind, color](const d5b::SpectralVector &wavelength, d5b::Scattering &scattering) {
       auto colorToSpectrum = [&](mi::Vector3d c) {
         d5b::SpectralVector spectrum{wavelength.shape};
         for (size_t i = 0; i < wavelength.size(); i++) {
@@ -110,23 +116,33 @@ bool LumberyardBistro::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSu
       diffuse.multiply(colorToSpectrum(color));
       scattering = std::move(diffuse);
 #else
-      if (itr != texturesForMaterial.end() && itr->second.isMetal) {
-        mi::render::ConductiveMicrosurface microsurface;
-        microsurface.roughness = {0.15, 0.15};
+      if (kind == MaterialKind::Metal) {
         scattering = {
           [=](mi::Vector3d omegaO, mi::Vector3d omegaI, d5b::SpectralVector &f) {
-            if (mi::signbit(omegaO[2]) == mi::signbit(omegaI[2]))
-              f = microsurface.singleScatter(omegaO, omegaI).value;
-            else
+            mi::render::MeasuredConductor conductor(mi::render::MeasuredConductor::Kind::CuZn);
+            mi::render::ConductiveMicrosurface microsurface;
+            microsurface.roughness = {0.15, 0.15};
+            if (mi::signbit(omegaO[2]) == mi::signbit(omegaI[2])) {
+              for (size_t i = 0; i < wavelength.size(); i++) {
+                auto eta = 1.0f / conductor.refractiveIndex(wavelength[i]);
+                microsurface.eta.real(eta.real());
+                microsurface.eta.imag(eta.imag());
+                f[i] = microsurface.singleScatter(omegaO, omegaI).value;
+              }
+            } else
               f = 0;
           },
           [=](mi::Vector3d omegaO, mi::Vector3d omegaI) -> double {
+            mi::render::ConductiveMicrosurface microsurface;
+            microsurface.roughness = {0.15, 0.15};
             if (mi::signbit(omegaO[2]) == mi::signbit(omegaI[2]))
               return microsurface.singleScatter(omegaO, omegaI).valuePDF;
             else
               return 0;
           },
           [=](d5b::Random &random, mi::Vector3d omegaO, mi::Vector3d &omegaI, d5b::SpectralVector &beta) -> double {
+            mi::render::ConductiveMicrosurface microsurface;
+            microsurface.roughness = {0.15, 0.15};
             omegaI = microsurface.singleScatterSample(random, omegaO);
             if (mi::signbit(omegaO[2]) == mi::signbit(omegaI[2])) {
               auto [f, p] = microsurface.singleScatter(omegaO, omegaI);
@@ -138,17 +154,28 @@ bool LumberyardBistro::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSu
             }
           },
         };
-        scattering.multiply(colorToSpectrum(color));
+        scattering.multiply(colorToSpectrum(color) * 3);
       } else {
+        double roughness{0.2};
         d5b::Scattering diffuse;
-        if (itr != texturesForMaterial.end() && (itr->second.isLeaf || itr->second.isCloth)) {
+        if (kind == MaterialKind::Leaf) {
           diffuse.setLambertDiffuse(0.5, 0.5);
+          roughness = 0.1;
+        } else if (kind == MaterialKind::Cloth) {
+          diffuse.setDisneyDiffuse(0.4, 1.0, 0.2, 0.5);
+          roughness = 0.5;
+        } else if (kind == MaterialKind::Wood) {
+          diffuse.setDisneyDiffuse(0.7, 1.0, 0.5, 0.0);
+          roughness = 0.3;
+        } else if (kind == MaterialKind::Pavement) {
+          diffuse.setDisneyDiffuse(0.5, 1.0, 0.1, 0.0);
+          roughness = 0.15;
         } else {
           diffuse.setDisneyDiffuse(0.3, 1.0, 0.2, 0.0);
         }
         diffuse.multiply(colorToSpectrum(color));
         mi::render::DielectricMicrosurface microsurface;
-        microsurface.roughness = {0.2, 0.2};
+        microsurface.roughness = {roughness, roughness};
         if (material.specular) {
           d5b::Scattering spec = {
             [=](mi::Vector3d omegaO, mi::Vector3d omegaI, d5b::SpectralVector &f) {
@@ -188,7 +215,7 @@ bool LumberyardBistro::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSu
   return false;
 }
 
-void LumberyardBistro::directLightsForVertex(
+void BistroWorld::directLightsForVertex(
   d5b::Random &random,
   const d5b::Vertex &vertex,
   const d5b::SpectralVector &wavelength,
@@ -212,9 +239,30 @@ void LumberyardBistro::directLightsForVertex(
   }
 }
 
-void LumberyardBistro::infiniteLightContributionForEscapedRay(
+void BistroWorld::infiniteLightContributionForEscapedRay(
   d5b::Random &, d5b::Ray, const d5b::SpectralVector &wavelength, d5b::SpectralVector &emission) const {
   for (size_t i = 0; i < wavelength.size(); i++) {
     emission[i] = 8 * mi::normalizedBlackbodyRadiance(12000.0, wavelength[i]);
   }
+}
+
+int main() {
+  Camera camera;
+  camera.localToWorld = d5b::DualQuaternion::lookAt({0, 300, 1000}, {0, 400, 0}, {0, 1, 0});
+  camera.sizeX = 1920; //* 2;
+  camera.sizeY = 1080; //* 2;
+  camera.fovY = 75.0_degrees;
+  camera.dofRadius = 1;
+  camera.dofDistance = 600;
+  camera.maxBounces = 5;
+  camera.maxSamples = 1024;
+  camera.initialize();
+
+  BistroWorld bistroWorld;
+  bistroWorld.initialize();
+  d5b::Simulation simulation{};
+  simulation.sensor = &camera;
+  simulation.world = &bistroWorld;
+  simulation.simulate();
+  return 0;
 }

@@ -1,14 +1,12 @@
 #pragma once
 
-#include <Microcosm/Geometry/FileMTL>
-#include <Microcosm/Geometry/FileOBJ>
-#include <Microcosm/Geometry/Mesh>
 #include <Microcosm/Render/TriangleMesh>
 #include <Microcosm/stbi>
+#include <list>
 
-#include "dirsig5b/World.h"
+#include "dirsig5b/Simulation.h"
 
-class LumberyardBistro final : public d5b::World {
+class ForestWorld final : public d5b::World {
 public:
   void initialize();
 
@@ -23,17 +21,19 @@ public:
   void infiniteLightContributionForEscapedRay(
     d5b::Random &random, d5b::Ray ray, const d5b::SpectralVector &wavelength, d5b::SpectralVector &emission) const override;
 
-  mi::geometry::FileOBJ fileOBJ;
-  mi::geometry::FileMTL fileMTL;
-  mi::render::TriangleMesh mesh;
-
-  struct Textures {
-    std::optional<mi::stbi::ImageU8> albedo;
-    std::optional<mi::stbi::ImageU8> normal;
-    std::optional<mi::stbi::ImageU8> opacity;
-    bool isLeaf{false};
-    bool isMetal{false};
-    bool isCloth{false};
+  struct Tree {
+    mi::stbi::ImageU8 leafOpacity;
+    mi::stbi::ImageU8 leafAlbedo;
+    mi::stbi::ImageU8 barkAlbedo;
+    std::list<mi::render::TriangleMesh> meshes;
   };
-  std::map<int16_t, Textures> texturesForMaterial;
+
+  struct TreeInstance {
+    const Tree *tree{};
+    const mi::render::TriangleMesh *mesh{};
+    d5b::Transform transform{};
+  };
+
+  std::list<Tree> trees;
+  std::vector<TreeInstance> treeInstances;
 };

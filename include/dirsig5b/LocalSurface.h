@@ -26,7 +26,6 @@ public:
 
   /// The local-to-world orthonormal basis.
   [[nodiscard]] Matrix3 localToWorld() const noexcept {
-    return Matrix3::orthonormalBasis(normal);
     Vector3 tangent = normalize(tangents[0] - dot(tangents[0], normal) * normal);
     if ((tangent == 0).all() || !mi::isfinite(tangent).all()) return Matrix3::orthonormalBasis(normal);
     Matrix3 basis;
