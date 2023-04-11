@@ -249,8 +249,8 @@ void BistroWorld::infiniteLightContributionForEscapedRay(
 int main() {
   Camera camera;
   camera.localToWorld = d5b::DualQuaternion::lookAt({0, 300, 1000}, {0, 400, 0}, {0, 1, 0});
-  camera.sizeX = 1920; //* 2;
-  camera.sizeY = 1080; //* 2;
+  camera.sizeX = 1920 * 2;
+  camera.sizeY = 1080 * 2;
   camera.fovY = 75.0_degrees;
   camera.dofRadius = 1;
   camera.dofDistance = 600;

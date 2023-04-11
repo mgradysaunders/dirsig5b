@@ -20,6 +20,8 @@ public:
   /// Is infinite in one or both directions?
   [[nodiscard]] bool isInfinite() const noexcept { return mi::isinf(minParam, maxParam); }
 
+  [[nodiscard]] operator mi::Ray3f() const noexcept { return {org, dir, minParam, maxParam}; }
+
   /// Apply coordinate transformation.
   Ray &withTransform(const Transform &transform) noexcept {
     org = transform.applyForward(Transform::Rule::Affine, org);

@@ -93,7 +93,7 @@ d5b::Status Camera::finish() {
         color[2] += mi::wymanFit1931Z(wavelength) * radiance;
       }
       color = mi::convertXYZToRGB(color);
-      color = mi::encodeSRGB(mi::Vector3d(gain * color));
+      color = mi::encodeSRGB(mi::tonemapACES(mi::Vector3d(gain * color)));
       imageU8(pixelY, pixelX, mi::Slice()).assign(255 * color);
     }
   }
