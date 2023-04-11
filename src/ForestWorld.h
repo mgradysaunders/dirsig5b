@@ -31,6 +31,9 @@ public:
   struct PlantInstance {
     const Plant *plant{};
     const mi::render::TriangleMesh *mesh{};
+    double chlorophylls{30};
+    double anthocyanins{0};
+    double carotenoids{5};
     d5b::Transform transform{};
 
     [[nodiscard]] std::optional<float> intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSurface &localSurface) const;
