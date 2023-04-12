@@ -120,7 +120,7 @@ bool BistroWorld::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSurface
         scattering = {
           [=](mi::Vector3d omegaO, mi::Vector3d omegaI, d5b::SpectralVector &f) {
             mi::render::MeasuredConductor conductor(mi::render::MeasuredConductor::Kind::CuZn);
-            mi::render::ConductiveMicrosurface microsurface;
+            mi::render::ConductorMicrosurface microsurface;
             microsurface.roughness = {0.15, 0.15};
             if (mi::signbit(omegaO[2]) == mi::signbit(omegaI[2])) {
               for (size_t i = 0; i < wavelength.size(); i++) {
@@ -133,7 +133,7 @@ bool BistroWorld::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSurface
               f = 0;
           },
           [=](mi::Vector3d omegaO, mi::Vector3d omegaI) -> double {
-            mi::render::ConductiveMicrosurface microsurface;
+            mi::render::ConductorMicrosurface microsurface;
             microsurface.roughness = {0.15, 0.15};
             if (mi::signbit(omegaO[2]) == mi::signbit(omegaI[2]))
               return microsurface.singleScatter(omegaO, omegaI).valuePDF;
@@ -141,7 +141,7 @@ bool BistroWorld::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSurface
               return 0;
           },
           [=](d5b::Random &random, mi::Vector3d omegaO, mi::Vector3d &omegaI, d5b::SpectralVector &beta) -> double {
-            mi::render::ConductiveMicrosurface microsurface;
+            mi::render::ConductorMicrosurface microsurface;
             microsurface.roughness = {0.15, 0.15};
             omegaI = microsurface.singleScatterSample(random, omegaO);
             if (mi::signbit(omegaO[2]) == mi::signbit(omegaI[2])) {
@@ -230,7 +230,7 @@ void BistroWorld::directLightsForVertex(
                                        d5b::Random &random, d5b::Vector3, d5b::Vector3 &direction, double &distance,
                                        d5b::SpectralVector &emissionOut) -> double {
       mi::Vector3d sunDirection = mi::normalize(mi::Vector3d(-1, 3, 1));
-      mi::Matrix3d sunBasis = mi::Matrix3d::orthonormalBasis(sunDirection);
+      mi::Matrix3d sunBasis = mi::Matrix3d::buildOrthonormalBasis(sunDirection);
       direction = mi::dot(sunBasis, mi::uniformConeSample<double>(0.9999, random));
       distance = d5b::Inf;
       emissionOut.assign(emission);

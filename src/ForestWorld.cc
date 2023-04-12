@@ -2,6 +2,7 @@
 #include "Camera.h"
 
 #include <Microcosm/Geometry/DynamicKDTree>
+#include <Microcosm/Noise>
 #include <Microcosm/Render/ConvertRGB>
 #include <Microcosm/Render/Illuminant>
 #include <Microcosm/Render/Microsurface>
@@ -14,7 +15,7 @@
 void ForestWorld::initialize() {
   int g = 0;
   for (const auto &group : std::filesystem::directory_iterator{"/home/michael/Documents/Models/Broadleaf-Summer"}) {
-    if (g++ > 4) break;
+    if (g++ > 16) break;
     std::string groupName = group.path().stem().string();
     auto &plant = plants.emplace_back();
     for (const auto &entry : std::filesystem::directory_iterator{group.path()}) {
@@ -77,31 +78,36 @@ void ForestWorld::initialize() {
   }
 
   mi::Pcg32 random;
-  std::vector<mi::Vector2f> instanceLocations;
-  {
-    mi::geometry::DynamicKDTree2 kdtree;
-    int failure = 0;
-    while (failure++ < 2048) {
-      mi::Vector2f position = {
-        mi::generateCanonical<float>(random) * 4000 - 2000, //
-        mi::generateCanonical<float>(random) * 4000 - 2000};
-      if (kdtree.nearest(position).dist > 500) {
-        kdtree.insert(position), failure = 0;
-        instanceLocations.push_back(position);
+  for (int i = -7; i <= +1; i++)
+    for (int j = -6; j <= +1; j++) {
+      std::vector<mi::Vector2f> instanceLocations;
+      {
+        mi::geometry::DynamicKDTree2 kdtree;
+        int failure = 0;
+        while (failure++ < 2048) {
+          mi::Vector2f position = {
+            (2 * i + 2 * mi::generateCanonical<float>(random) - 1) * 40000, //
+            (2 * j + 2 * mi::generateCanonical<float>(random) - 1) * 40000};
+          if (kdtree.nearest(position).dist > 500) {
+            kdtree.insert(position), failure = 0;
+            instanceLocations.push_back(position);
+          }
+        }
       }
+      for (const auto &instanceLocation : instanceLocations) {
+        auto &inst = plantInstances.emplace_back();
+        inst.plant = &*std::next(plants.begin(), random(plants.size()));
+        inst.mesh = &*std::next(inst.plant->meshes.begin(), random(inst.plant->meshes.size()));
+        inst.transform = mi::DualQuaterniond::translate({instanceLocation[0], instanceLocation[1], 0}) *
+                         mi::DualQuaterniond::rotateZ(mi::generateCanonical<double>(random) * 6.28);
+        inst.numLayers = mi::generateCanonical<double>(random) * 0.2 + 1.4;
+        inst.chlorophylls = mi::lerp(mi::generateCanonical<double>(random), 30, 45);
+        inst.anthocyanins = mi::lerp(mi::generateCanonical<double>(random), 0, 5);
+        inst.carotenoids = mi::lerp(mi::generateCanonical<double>(random), 2, 8);
+        inst.dryMatter = mi::lerp(mi::generateCanonical<double>(random), 0.003, 0.005);
+      }
+      std::cout << plantInstances.size() << std::endl;
     }
-    std::cout << instanceLocations.size() << std::endl;
-  }
-  for (const auto &instanceLocation : instanceLocations) {
-    auto &inst = plantInstances.emplace_back();
-    inst.plant = &*std::next(plants.begin(), random(plants.size()));
-    inst.mesh = &*std::next(inst.plant->meshes.begin(), random(inst.plant->meshes.size()));
-    inst.transform = mi::DualQuaterniond::translate({instanceLocation[0], instanceLocation[1], 0}) *
-                     mi::DualQuaterniond::rotateZ(mi::generateCanonical<double>(random) * 6.28);
-    inst.chlorophylls = mi::lerp(mi::generateCanonical<double>(random), 20, 45);
-    inst.anthocyanins = mi::lerp(mi::generateCanonical<double>(random), 0, 5);
-    inst.carotenoids = mi::lerp(mi::generateCanonical<double>(random), 5, 15);
-  }
 
   plantInstanceTree.build(plantInstances, 1, [](const auto &inst) -> mi::BoundBox3f {
     mi::BoundBox3f boxResult;
@@ -120,6 +126,7 @@ ForestWorld::PlantInstance::intersect(d5b::Random &random, d5b::Ray ray, d5b::Lo
     localSurface.tangents[0] = location.shading.tangents.col(0);
     localSurface.tangents[1] = location.shading.tangents.col(1);
     localSurface.normal = mi::normalize(location.shading.normal);
+    localSurface.withTransform(transform);
     auto texcoord = location.shading.texcoord;
     auto material = mesh->materials[location.index];
     if (material == 0) {
@@ -136,12 +143,14 @@ ForestWorld::PlantInstance::intersect(d5b::Random &random, d5b::Ray ray, d5b::Lo
         scattering.setLambertDiffuse(1.0, 1.0);
         d5b::SpectralVector Lr{wavelength.shape};
         d5b::SpectralVector Lt{wavelength.shape};
+        mi::Noise3d noise;
         mi::render::Prospect prospect;
-        prospect.chlorophylls = chlorophylls;
-        prospect.anthocyanins = anthocyanins;
-        prospect.carotenoids = carotenoids;
-        // prospect.anthocyanins = mi::lerp(mi::saturate(mi::unlerp(position[2], 100.0, 800.0)), 0, 20);
-        // prospect.carotenoids = mi::lerp(mi::saturate(mi::unlerp(position[2], 100.0, 800.0)), 50, 10);
+        double t = mi::saturate(noise(position * 0.00005) * 0.5 + 0.5);
+        prospect.numLayers = numLayers;
+        prospect.chlorophylls = mi::lerp(t, 1, 0.1) * (chlorophylls + noise(0.001 * position) * 5);
+        prospect.anthocyanins = mi::lerp(t, 1, 1.5) * anthocyanins;
+        prospect.carotenoids = mi::lerp(t, 1, 2) * carotenoids;
+        prospect.dryMatter = dryMatter;
         for (size_t i = 0; i < wavelength.size(); i++) {
           auto [r, t] = prospect(wavelength[i]);
           Lr[i] = r;
@@ -182,7 +191,6 @@ ForestWorld::PlantInstance::intersect(d5b::Random &random, d5b::Ray ray, d5b::Lo
         scattering.multiply(colorToSpectrum(color));
       }
     };
-    localSurface.withTransform(transform);
     return param;
   }
   return std::nullopt;
@@ -228,8 +236,8 @@ void ForestWorld::directLightsForVertex(
     sun.importanceSampleSolidAngle = [emission = std::move(emission)](
                                        d5b::Random &random, d5b::Vector3, d5b::Vector3 &direction, double &distance,
                                        d5b::SpectralVector &emissionOut) -> double {
-      mi::Vector3d sunDirection = mi::normalize(mi::Vector3d(-1, 2, 7));
-      mi::Matrix3d sunBasis = mi::Matrix3d::orthonormalBasis(sunDirection);
+      mi::Vector3d sunDirection = mi::normalize(mi::Vector3d(-1, 3, 2));
+      mi::Matrix3d sunBasis = mi::Matrix3d::buildOrthonormalBasis(sunDirection);
       direction = mi::dot(sunBasis, mi::uniformConeSample<double>(0.9999, random));
       distance = d5b::Inf;
       emissionOut.assign(emission);
@@ -249,14 +257,15 @@ void ForestWorld::infiniteLightContributionForEscapedRay(
 int main() {
   Camera camera;
   camera.basename = "Forest";
-  camera.localToWorld = d5b::DualQuaternion::lookAt({4.5 * 1000, 5.5 * 500, 2000}, {0, 0, 500}, {0, 0, 1});
-  camera.sizeX = 1024; //* 2;
-  camera.sizeY = 1024; //* 2;
+  camera.localToWorld = d5b::DualQuaternion::lookAt({1.8 * 20000, 1.8 * 20000, 1.8 * 20000}, {0, 0, 500}, {0, 0, 1});
+  camera.sizeX = 1920 * 2;
+  camera.sizeY = 1080 * 2;
   camera.fovY = 60.0_degrees;
   camera.dofRadius = 0;
   camera.dofDistance = 600;
   camera.maxBounces = 5;
   camera.maxSamples = 1024;
+  camera.numSamplesPerBatch = 2;
   camera.initialize();
 
   ForestWorld forestWorld;

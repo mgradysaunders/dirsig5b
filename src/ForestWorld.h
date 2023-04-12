@@ -34,6 +34,8 @@ public:
     double chlorophylls{30};
     double anthocyanins{0};
     double carotenoids{5};
+    double numLayers{1.5};
+    double dryMatter{0.005};
     d5b::Transform transform{};
 
     [[nodiscard]] std::optional<float> intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSurface &localSurface) const;
