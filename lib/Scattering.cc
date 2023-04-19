@@ -1,10 +1,11 @@
 #include "dirsig5b/Scattering.h"
 
-#include <Microcosm/Render/DiffuseModels>
-#include <Microcosm/Render/Phase>
+// #include <Microcosm/Render/DiffuseModels>
+// #include <Microcosm/Render/Phase>
 
 namespace d5b {
 
+#if 0
 void Scattering::setHenyeyGreenstein(double meanCosine) {
   auto phase{mi::render::HenyeyGreensteinPhase(meanCosine)};
   *this = Scattering{
@@ -14,6 +15,7 @@ void Scattering::setHenyeyGreenstein(double meanCosine) {
       return phase.phase(omegaO, omegaI = phase.phaseSample(random));
     }};
 }
+#endif
 
 void Scattering::setLambertDiffuse(double fractionR, double fractionT) {
   double weightR = fractionR / (fractionR + fractionT);
@@ -34,8 +36,8 @@ void Scattering::setLambertDiffuse(double fractionR, double fractionT) {
       }
     },
     [=](Random &random, Vector3 omegaO, Vector3 &omegaI, SpectralVector &beta) -> double {
-      omegaI = cosineHemisphereSample<double>(random);
-      if (weightR == 1 || generateCanonical<double>(random) < weightR) {
+      omegaI = cosineHemisphereSample(random);
+      if (weightR == 1 || randomize<double>(random) < weightR) {
         omegaI[2] = copysign(omegaI[2], +omegaO[2]), beta *= weightR;
         return weightR * OneOverPi * abs(omegaI[2]);
       } else {
@@ -45,6 +47,7 @@ void Scattering::setLambertDiffuse(double fractionR, double fractionT) {
     }};
 }
 
+#if 0
 void Scattering::setDisneyDiffuse(double roughness, double lambert, double retro, double sheen) {
   setLambertDiffuse(1, 0);
   evaluateBSDF = [=](Vector3 omegaO, Vector3 omegaI, SpectralVector &f) {
@@ -89,7 +92,7 @@ void Scattering::setLinearMixture(std::vector<std::pair<double, Scattering>> wei
     [=](Random &random, Vector3 omegaO, Vector3 &omegaI, SpectralVector &beta) -> double {
       SpectralVector &f = beta;
       SpectralVector g(f.shape);
-      double u = generateCanonical<double>(random);
+      double u = randomize<double>(random);
       size_t i = 0;
       for (const auto &[weight, term] : *sharedWeightAndTerm) {
         if (u <= weight || i + 1 == sharedWeightAndTerm->size()) {
@@ -130,5 +133,6 @@ void Scattering::multiply(SpectralVector fraction) {
       return p;
     }};
 }
+#endif
 
 } // namespace d5b

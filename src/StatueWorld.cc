@@ -1,42 +1,68 @@
 #include "StatueWorld.h"
 #include "Camera.h"
 
-#include <Microcosm/Noise>
-#include <Microcosm/Render/Illuminant>
+#include <Microcosm/SimplexNoise>
+#if 0
 #include <Microcosm/Render/DiffuseModels>
 #include <Microcosm/Render/MeasuredConductor>
 #include <Microcosm/Render/Microsurface>
 #include <Microcosm/Render/MicrosurfaceModels>
+#endif
 
 void StatueWorld::initialize() {
-  auto happy = mi::geometry::Mesh(mi::geometry::FileOBJ("/home/michael/Documents/Models/happy-remesh.obj"));
+  auto happy = mi::geometry::Mesh(mi::geometry::FileOBJ("/home/michael/Documents/Assets/Models/Standalone/dragon1.obj"));
+  happy.rotateZ(-0.6);
   happy.calculateNormals();
   // happy.translate(mi::Vector3f(0, 0, -happy.boundBox()[0][2]));
   // happy.scale(4);
-  mesh.buildFrom(happy, 2);
+  mesh.build(happy);
 }
 
 bool StatueWorld::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSurface &localSurface) const {
   bool result{false};
+  mi::render::Manifold manifold;
+  if (auto param = mesh.intersect(mi::Ray3d(ray.org, ray.dir, ray.minParam, ray.maxParam), manifold)) {
+    ray.maxParam = *param;
+    mi::SimplexNoise3d noise1{15};
+    mi::SimplexNoise3d noise2{18};
+    mi::Vector3d gradient1;
+    mi::Vector3d gradient2;
+    noise1(mi::Vector3d(100, 100, 100) * manifold.properTangentSpace.point, &gradient1);
+    noise2(mi::Vector3d(500, 500, 500) * manifold.properTangentSpace.point + 30000, &gradient2);
+    manifold.pseudoTangentSpace->perturbWithLocalNormal(mi::Vector3d(0, 0, 1) + 0.02 * gradient1 + 0.01 * gradient2);
+
+    mi::Matrix3d basis = mi::Matrix3d::orthonormalBasis(mi::normalize(manifold.pseudoTangentSpace->normal));
+    localSurface.position = manifold.properTangentSpace.point;
+    localSurface.texcoord = manifold.properTangentSpace.parameters;
+    localSurface.normal = basis.col(2);
+    localSurface.tangents[0] = basis.col(0);
+    localSurface.tangents[1] = basis.col(1);
+    localSurface.scatteringProvider = [&](const d5b::SpectralVector &wavelength, d5b::Scattering &scattering) {
+      scattering.setLambertDiffuse(0.1, 0);
+    };
+    result = true;
+  }
+#if 0
   mi::render::TriangleMesh::Location location;
   if (auto param = mesh.rayTest(mi::Ray3f(ray.org, ray.dir, ray.minParam, ray.maxParam), location)) {
     ray.maxParam = *param;
     localSurface.position = location.point;
     localSurface.texcoord = location.shading.texcoord;
-    mi::Matrix3d basis = mi::Matrix3d::buildOrthonormalBasis(mi::normalize(location.shading.normal));
+    mi::Matrix3d basis = mi::Matrix3d::orthonormalBasis(mi::normalize(location.shading.normal));
     mi::Noise3d noiseAngle{24};
     basis = mi::dot(mi::Matrix3d(mi::Quaterniond::rotate(6 * mi::abs(noiseAngle(location.point)), basis.col(2))), basis);
     localSurface.normal = basis.col(2);
     localSurface.tangents[0] = basis.col(0);
     localSurface.tangents[1] = basis.col(1);
 
-#if 1
-    mi::Noise3d noise{15};
-    mi::Vector3d gradient;
-    noise(mi::Vector3d(100, 100, 100) * location.point, &gradient);
-    localSurface.normal = mi::normalize(localSurface.normal + 0.05 * gradient);
-#endif
-
+#if 0
+    mi::Noise3d noise1{15};
+    mi::Noise3d noise2{18};
+    mi::Vector3d gradient1;
+    mi::Vector3d gradient2;
+    noise1(mi::Vector3d(100, 100, 100) * location.point, &gradient1);
+    noise2(mi::Vector3d(500, 500, 500) * location.point + 30000, &gradient2);
+    localSurface.normal = mi::normalize(localSurface.normal + 0.02 * gradient1 + 0.01 * gradient2);
 #if 0
     localSurface.scatteringProvider =
       [this, point = location.point](const d5b::SpectralVector &wavelength, d5b::Scattering &scattering) {
@@ -104,15 +130,14 @@ bool StatueWorld::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSurface
 #else
     localSurface.scatteringProvider = [this, point = location.point,
                                        seed = random()](const d5b::SpectralVector &wavelength, d5b::Scattering &scattering) {
-      double roughnessX = mi::lerp(mi::saturate(mi::Noise3d()(10 + 4 * point) * 0.5f + 0.5f), 0.01, 0.2);
+      double roughnessX = mi::lerp(mi::saturate(mi::Noise3d()(10 + 4 * point) * 0.5f + 0.5f), 0.1, 0.2);
       double roughnessY = mi::lerp(mi::saturate(mi::Noise3d()(50 + 7 * point) * 0.5f + 0.5f), 0.2, 0.6);
-      double thickness = mi::lerp(mi::saturate(mi::Noise3d()(10 * point) * 0.5f + 0.5f), 0.1, 0.6);
+      double thickness = mi::lerp(mi::saturate(mi::Noise3d()(20 * point) * 0.5f + 0.5f), 0.1, 0.6);
       scattering = {
         [=](mi::Vector3d omegaO, mi::Vector3d omegaI, d5b::SpectralVector &f) {
           mi::render::DisneyDiffuseBRDF diff;
           diff.roughness = 1;
-          diff.lambert = 0.04;
-          diff.retro = 0.2;
+          diff.lambert = 0.01;
           mi::render::DielectricMicrosurface brdf{};
           mi::render::microsurface::ThinFilmFresnel fresnel{};
           brdf.roughness = {roughnessX, roughnessY};
@@ -127,7 +152,7 @@ bool StatueWorld::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSurface
               fresnel.filmParams.refractiveIndex = mi::lerp(t, 1.8, 1.45);
               brdf.etaBelow = mi::lerp(mi::sqr(t), 1.4, 1.2);
               diff.roughness = mi::lerp(t, 0.6, 1.0);
-              diff.retro = mi::lerp(t, 0.2, 0.08);
+              diff.retro = mi::lerp(t, 0.5, 0.08);
               brdf.roughness[1] = mi::lerp(t, 0.8, 1.9) * roughnessY;
               f[i] = brdf.singleScatter(omegaO, omegaI).value + diff.scatter(omegaO, omegaI);
             }
@@ -151,8 +176,7 @@ bool StatueWorld::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSurface
         [=](d5b::Random &random, mi::Vector3d omegaO, mi::Vector3d &omegaI, d5b::SpectralVector &beta) -> double {
           mi::render::DisneyDiffuseBRDF diff;
           diff.roughness = 1;
-          diff.lambert = 0.1;
-          diff.retro = 0.2;
+          diff.lambert = 0.01;
           mi::render::DielectricMicrosurface brdf{};
           mi::render::microsurface::ThinFilmFresnel fresnel{};
           brdf.roughness = {roughnessX, roughnessY};
@@ -161,7 +185,7 @@ bool StatueWorld::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSurface
           brdf.random = d5b::Random(seed);
           fresnel.filmParams.wavelength = 0.5;
           fresnel.filmParams.thickness = thickness;
-          if (mi::generateCanonical<double>(random) < 0.3) {
+          if (mi::randomize<double>(random) < 0.3) {
             omegaI = mi::cosineHemisphereSample<double>(random);
             omegaI[2] = mi::sign(omegaO[2]) * omegaI[2];
           } else
@@ -174,7 +198,7 @@ bool StatueWorld::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSurface
               fresnel.filmParams.refractiveIndex = mi::lerp(t, 1.8, 1.45);
               brdf.etaBelow = mi::lerp(mi::sqr(t), 1.4, 1.2);
               diff.roughness = mi::lerp(t, 0.6, 1.0);
-              diff.retro = mi::lerp(t, 0.2, 0.08);
+              diff.retro = mi::lerp(t, 0.5, 0.08);
               brdf.roughness[1] = mi::lerp(t, 0.8, 1.9) * roughnessY;
               beta[i] = brdf.singleScatter(omegaO, omegaI).value + diff.scatter(omegaO, omegaI);
             }
@@ -187,13 +211,15 @@ bool StatueWorld::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSurface
         }};
     };
 #endif
+#endif
     result = true;
   }
-  if (auto param = mi::Plane3d({0, 1, 0}, 0).rayTest(mi::Ray3d(ray.org, ray.dir, ray.minParam, ray.maxParam))) {
-    localSurface.position = ray.org + *param * ray.dir;
-    localSurface.tangents[0] = {0, 0, 1};
-    localSurface.tangents[1] = {1, 0, 0};
-    localSurface.normal = {0, 1, 0};
+#endif
+  if (auto [hit, param] = mi::Plane3d({0, 0, 1}, 0).rayCast(mi::Ray3d(ray.org, ray.dir, ray.minParam, ray.maxParam)); hit) {
+    localSurface.position = ray.org + param * ray.dir;
+    localSurface.tangents[0] = {1, 0, 0};
+    localSurface.tangents[1] = {0, 1, 0};
+    localSurface.normal = {0, 0, 1};
     localSurface.scatteringProvider = [&](const d5b::SpectralVector &wavelength, d5b::Scattering &scattering) {
       scattering.setLambertDiffuse(0.1, 0);
     };
@@ -207,46 +233,49 @@ void StatueWorld::directLightsForVertex(
   const d5b::Vertex &vertex,
   const d5b::SpectralVector &wavelength,
   std::vector<d5b::DirectLight> &directLights) const {
-
   {
-    d5b::SpectralVector emission{wavelength.shape};
-    for (size_t i = 0; i < wavelength.size(); i++) emission[i] = 100 * mi::render::IlluminantF(1, wavelength[i]);
+    d5b::SpectralVector emission = 160 * mi::render::spectrumIlluminantF(wavelength, 1);
     auto &light1 = directLights.emplace_back();
     light1.importanceSampleSolidAngle = [emission = std::move(emission)](
                                           d5b::Random &random, d5b::Vector3 position, d5b::Vector3 &direction, double &distance,
                                           d5b::SpectralVector &emissionOut) -> double {
       double diskRadius = 1;
-      mi::Vector3d diskPosition = {-4, 4, 4};
+      mi::Vector3d diskPosition = {4, -4, 4};
       mi::Vector3d diskNormal = mi::normalize(diskPosition);
-      mi::Matrix3d diskMatrix = mi::Matrix3d::buildOrthonormalBasis(diskNormal);
-      mi::Vector2d diskSample = diskRadius * mi::uniformDiskSample<double>(random);
+      mi::Matrix3d diskMatrix = mi::Matrix3d::orthonormalBasis(diskNormal);
+      mi::Vector2d diskSample = diskRadius * mi::render::uniformDiskSample(random);
       mi::Vector3d samplePosition = diskPosition + diskMatrix.col(0) * diskSample[0] + diskMatrix.col(1) * diskSample[1];
       direction = mi::fastNormalize(samplePosition - position);
       distance = mi::fastLength(samplePosition - position);
-      emissionOut.assign(emission);
-      return mi::areaToSolidAngleMeasure<double>(position, samplePosition, diskNormal) /
+      if (dot(direction, diskNormal) > 0)
+        emissionOut.assign(emission);
+      else
+        emissionOut = 0;
+      return mi::render::areaToSolidAngleMeasure(position, samplePosition, diskNormal) /
              (mi::constants::Pi<double> * diskRadius * diskRadius);
     };
     light1.numSubSamples = 2;
   }
 
   {
-    d5b::SpectralVector emission{wavelength.shape};
-    for (size_t i = 0; i < wavelength.size(); i++) emission[i] = 0.2 * mi::render::IlluminantF(3, wavelength[i]);
+    d5b::SpectralVector emission = 50 * mi::render::spectrumIlluminantF(wavelength, 3);
     auto &light2 = directLights.emplace_back();
     light2.importanceSampleSolidAngle = [emission = std::move(emission)](
                                           d5b::Random &random, d5b::Vector3 position, d5b::Vector3 &direction, double &distance,
                                           d5b::SpectralVector &emissionOut) -> double {
-      double diskRadius = 5;
-      mi::Vector3d diskPosition = {5, 4, -2};
+      double diskRadius = 1;
+      mi::Vector3d diskPosition = {-5, 2, 4};
       mi::Vector3d diskNormal = mi::normalize(diskPosition);
-      mi::Matrix3d diskMatrix = mi::Matrix3d::buildOrthonormalBasis(diskNormal);
-      mi::Vector2d diskSample = diskRadius * mi::uniformDiskSample<double>(random);
+      mi::Matrix3d diskMatrix = mi::Matrix3d::orthonormalBasis(diskNormal);
+      mi::Vector2d diskSample = diskRadius * mi::render::uniformDiskSample(random);
       mi::Vector3d samplePosition = diskPosition + diskMatrix.col(0) * diskSample[0] + diskMatrix.col(1) * diskSample[1];
       direction = mi::fastNormalize(samplePosition - position);
       distance = mi::fastLength(samplePosition - position);
-      emissionOut.assign(emission);
-      return mi::areaToSolidAngleMeasure<double>(position, samplePosition, diskNormal) /
+      if (dot(direction, diskNormal) > 0)
+        emissionOut.assign(emission);
+      else
+        emissionOut = 0;
+      return mi::render::areaToSolidAngleMeasure(position, samplePosition, diskNormal) /
              (mi::constants::Pi<double> * diskRadius * diskRadius);
     };
     light2.numSubSamples = 2;
@@ -255,19 +284,20 @@ void StatueWorld::directLightsForVertex(
 
 void StatueWorld::infiniteLightContributionForEscapedRay(
   d5b::Random &, d5b::Ray ray, const d5b::SpectralVector &, d5b::SpectralVector &emission) const {
-  emission = 2 * mi::max(ray.dir[2], 0);
+  // emission = 2 * mi::max(ray.dir[2], 0);
 }
 
 int main() {
   Camera camera;
-  camera.localToWorld = d5b::DualQuaternion::lookAt({0, 0.5, 4}, {0, 1.65, 0}, {0, 1, 0});
-  camera.sizeX = 1024 * 4;
-  camera.sizeY = 1024 * 4;
-  camera.fovY = 60.0_degrees;
-  camera.dofRadius = 0.01;
+  camera.localToWorld = d5b::DualQuaternion::lookAt({1, -4, 0.5}, {0, 0, 0.5}, {0, 0, 1});
+  camera.sizeX = 1920 ;
+  camera.sizeY = 1080 ;
+  camera.fovY = 35.0_degrees;
+  camera.dofRadius = 0; // 0.01;
   camera.dofDistance = 4.5;
   camera.maxBounces = 5;
   camera.maxSamples = 1024;
+  camera.numSamplesPerBatch = 8;
   camera.gain = 0.5;
   camera.initialize();
 

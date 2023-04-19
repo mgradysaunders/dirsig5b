@@ -31,4 +31,3 @@ find_package(Microcosm REQUIRED)
 find_package(OpenMP REQUIRED)
 add_subdirectory(lib)
 add_subdirectory(src)
-

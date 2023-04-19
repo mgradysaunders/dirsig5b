@@ -63,8 +63,8 @@ bool BistroWorld::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSurface
     auto itr = texturesForMaterial.find(materialIndex);
     if (itr != texturesForMaterial.end() && itr->second.normal) {
       auto &normal = *itr->second.normal;
-      int y = normal.size(0) * (1 - mi::fract(texcoord[1]));
-      int x = normal.size(1) * mi::fract(texcoord[0]);
+      int y = normal.size(0) * (1 - mi::fastFract(texcoord[1]));
+      int x = normal.size(1) * mi::fastFract(texcoord[0]);
       mi::Vector3d localNormal = {
         normal(y, x, 0) * (1.0 / 255.0) * 2 - 1, //
         normal(y, x, 1) * (1.0 / 255.0) * 2 - 1, //
@@ -74,8 +74,8 @@ bool BistroWorld::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSurface
     mi::Vector4d color{1, 1, 1, 1};
     if (itr != texturesForMaterial.end() && itr->second.albedo) {
       auto &albedo = *itr->second.albedo;
-      int y = albedo.size(0) * (1 - mi::fract(texcoord[1]));
-      int x = albedo.size(1) * mi::fract(texcoord[0]);
+      int y = albedo.size(0) * (1 - mi::fastFract(texcoord[1]));
+      int x = albedo.size(1) * mi::fastFract(texcoord[0]);
       color[0] = mi::decodeSRGB(albedo(y, x, 0) * (1.0 / 255.0));
       color[1] = mi::decodeSRGB(albedo(y, x, 1) * (1.0 / 255.0));
       color[2] = mi::decodeSRGB(albedo(y, x, 2) * (1.0 / 255.0));
@@ -85,8 +85,8 @@ bool BistroWorld::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSurface
 #if !DIRSIG_STYLE
     if (itr != texturesForMaterial.end() && itr->second.opacity) {
       auto &opacity = *itr->second.opacity;
-      int y = opacity.size(0) * (1 - mi::fract(texcoord[1]));
-      int x = opacity.size(1) * mi::fract(texcoord[0]);
+      int y = opacity.size(0) * (1 - mi::fastFract(texcoord[1]));
+      int x = opacity.size(1) * mi::fastFract(texcoord[0]);
       if (opacity(y, x, 0) == 0) {
         ray.minParam = *param + 1e-3;
         return intersect(random, ray, localSurface);
@@ -248,12 +248,12 @@ void BistroWorld::infiniteLightContributionForEscapedRay(
 
 int main() {
   Camera camera;
-  camera.localToWorld = d5b::DualQuaternion::lookAt({0, 300, 1000}, {0, 400, 0}, {0, 1, 0});
+  camera.localToWorld = d5b::DualQuaternion::lookAt({100, 155, 525}, {-20, 145, 0}, {0, 1, 0});
   camera.sizeX = 1920 * 2;
   camera.sizeY = 1080 * 2;
   camera.fovY = 75.0_degrees;
   camera.dofRadius = 1;
-  camera.dofDistance = 600;
+  camera.dofDistance = 35;
   camera.maxBounces = 5;
   camera.maxSamples = 1024;
   camera.initialize();

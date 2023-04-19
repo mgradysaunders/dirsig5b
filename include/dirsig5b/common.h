@@ -2,8 +2,9 @@
 
 #include <Microcosm/Pcg>
 #include <Microcosm/Quaternion>
-#include <Microcosm/shape>
-#include <Microcosm/tensor>
+#include <Microcosm/Render/common>
+#include <Microcosm/Render/Spectrum>
+#include <Microcosm/Tensor>
 #include <functional>
 #include <memory>
 
@@ -26,23 +27,23 @@ using Matrix3 = mi::Matrix3d;
 using Matrix4 = mi::Matrix4d;
 using Quaternion = mi::Quaterniond;
 using DualQuaternion = mi::DualQuaterniond;
-using SpectralVector = mi::Vectord;
+using SpectralVector = mi::render::Spectrum;
 
 using mi::abs;
 using mi::copysign;
-using mi::cosineHemisphereSample;
 using mi::distance;
 using mi::distanceSquare;
 using mi::dot;
 using mi::fastLength;
 using mi::fastNormalize;
-using mi::generateCanonical;
 using mi::inverse;
 using mi::length;
 using mi::lengthSquare;
 using mi::normalize;
+using mi::randomize;
 using mi::signbit;
 using mi::Slice;
+using mi::render::cosineHemisphereSample;
 
 [[nodiscard]] inline bool isFiniteAndPositive(double x) noexcept { return x > 0 && mi::isfinite(x); }
 [[nodiscard]] inline bool isFiniteAndPositive(const SpectralVector &v) noexcept {

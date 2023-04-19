@@ -30,18 +30,19 @@ void Camera::request(std::vector<d5b::ProblemRequest> &problemRequests) {
         problem.wavelength = this->cache.wavelength;
         problem.throughput = this->cache.throughput;
         problem.sampleRay = [this, pixelX, pixelY](d5b::Random &random) -> d5b::Ray {
-          double uX = d5b::generateCanonical<double>(random);
-          double uY = d5b::generateCanonical<double>(random);
+          double uX = d5b::randomize<double>(random);
+          double uY = d5b::randomize<double>(random);
           d5b::Ray ray{};
           ray.dir[0] = ((pixelX + uX) / double(this->sizeX) - 0.5) * this->cache.aspectRatio;
           ray.dir[1] = ((pixelY + uY) / double(this->sizeY) - 0.5) * -1;
           ray.dir[2] = -this->cache.focalLength;
           ray.dir = mi::fastNormalize(ray.dir);
+#if 0
           if (this->dofRadius > 0) {
             d5b::Vector3 focus = ray.org + this->dofDistance / mi::abs(ray.dir[2]) * ray.dir;
             d5b::Vector2 shift;
             if (this->dofApertureBlades < 3) {
-              shift = mi::uniformDiskSample<double>(random);
+              shift = mi::render::uniformDiskSample(random);
             } else {
               size_t t = random(this->dofApertureBlades - 2) + 1;
               double angleB = 2 * d5b::Pi * double(t + 0) / double(this->dofApertureBlades);
@@ -56,6 +57,7 @@ void Camera::request(std::vector<d5b::ProblemRequest> &problemRequests) {
             ray.org[1] += this->dofRadius * shift[1];
             ray.dir = mi::normalize(focus - ray.org);
           }
+#endif
           return ray.withTransform(localToWorld);
         };
         struct AcceptPathContribution {
@@ -81,6 +83,7 @@ d5b::Status Camera::finish() {
   std::cout << "Finished {}/{} samples!\n"_format(cache.numSamples, maxSamples);
   std::cout.flush();
   mi::stbi::ImageU8 imageU8(mi::with_shape, sizeY, sizeX, 3);
+#pragma omp parallel for num_threads(100) schedule(dynamic)
   for (size_t pixelY = 0; pixelY < sizeY; pixelY++) {
     for (size_t pixelX = 0; pixelX < sizeX; pixelX++) {
       mi::Vector3d color;
