@@ -21,7 +21,7 @@ void StatueWorld::initialize() {
 bool StatueWorld::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSurface &localSurface) const {
   bool result{false};
   mi::render::Manifold manifold;
-  if (auto param = mesh.intersect(mi::Ray3d(ray.org, ray.dir, ray.minParam, ray.maxParam), manifold)) {
+  if (auto param = mesh.intersect(mi::Ray3d(ray), manifold)) {
     ray.maxParam = *param;
     mi::SimplexNoise3d noise1{15};
     mi::SimplexNoise3d noise2{18};
@@ -215,8 +215,8 @@ bool StatueWorld::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSurface
     result = true;
   }
 #endif
-  if (auto [hit, param] = mi::Plane3d({0, 0, 1}, 0).rayCast(mi::Ray3d(ray.org, ray.dir, ray.minParam, ray.maxParam)); hit) {
-    localSurface.position = ray.org + param * ray.dir;
+  if (auto param = mi::Plane3d({0, 0, 1}, 0).rayCast(mi::Ray3d(ray))) {
+    localSurface.position = ray.org + *param * ray.dir;
     localSurface.tangents[0] = {1, 0, 0};
     localSurface.tangents[1] = {0, 1, 0};
     localSurface.normal = {0, 0, 1};
@@ -290,8 +290,8 @@ void StatueWorld::infiniteLightContributionForEscapedRay(
 int main() {
   Camera camera;
   camera.localToWorld = d5b::DualQuaternion::lookAt({1, -4, 0.5}, {0, 0, 0.5}, {0, 0, 1});
-  camera.sizeX = 1920 ;
-  camera.sizeY = 1080 ;
+  camera.sizeX = 1920;
+  camera.sizeY = 1080;
   camera.fovY = 35.0_degrees;
   camera.dofRadius = 0; // 0.01;
   camera.dofDistance = 4.5;

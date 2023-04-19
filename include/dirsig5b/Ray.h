@@ -22,6 +22,8 @@ public:
 
   [[nodiscard]] operator mi::Ray3f() const noexcept { return {org, dir, float(minParam), float(maxParam)}; }
 
+  [[nodiscard]] operator mi::Ray3d() const noexcept { return {org, dir, minParam, maxParam}; }
+
   /// Apply coordinate transformation.
   Ray &withTransform(const Transform &transform) noexcept {
     org = transform.applyForward(Transform::Rule::Affine, org);
