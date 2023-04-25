@@ -103,7 +103,7 @@ void Simulation::simulate(Problem problem) {
               // all terms except for transmission/shadowing. There is a chance the BSDF evaluates to zero
               // due to reflection/transmission mismatch at the surface, which would allow us to skip
               // tracing the shadow ray, which is almost always the most expensive.
-              vertex.evaluateBSDF(omegaO, omegaI, direct);
+              vertex.scatterBSDF(omegaO, omegaI, direct);
               direct *= (1 / solidAngleDensity) * emission * throughput;
               if (isFiniteAndPositive(direct)) {
                 // The solid-angle density combined with the emission, BSDF, and current path throughput

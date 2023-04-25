@@ -2,8 +2,9 @@
 
 #include <Microcosm/Pcg>
 #include <Microcosm/Quaternion>
-#include <Microcosm/Render/common>
+#include <Microcosm/Render/Scattering>
 #include <Microcosm/Render/Spectrum>
+#include <Microcosm/Render/common>
 #include <Microcosm/Tensor>
 #include <functional>
 #include <memory>
@@ -49,5 +50,8 @@ using mi::render::cosineHemisphereSample;
 [[nodiscard]] inline bool isFiniteAndPositive(const SpectralVector &v) noexcept {
   return (v > 0).any() && mi::isfinite(v).all();
 }
+
+using Scattering = mi::render::Scattering;
+using ScatteringProvider = std::function<void(const SpectralVector &wavelength, Scattering &scattering)>;
 
 } // namespace d5b

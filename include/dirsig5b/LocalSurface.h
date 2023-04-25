@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dirsig5b/Scattering.h"
+#include "dirsig5b/Transform.h"
 
 namespace d5b {
 

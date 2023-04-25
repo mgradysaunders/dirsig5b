@@ -1,13 +1,12 @@
 #include "StatueWorld.h"
 #include "Camera.h"
+#include <iostream>
 
-#include <Microcosm/SimplexNoise>
-#if 0
 #include <Microcosm/Render/DiffuseModels>
-#include <Microcosm/Render/MeasuredConductor>
 #include <Microcosm/Render/Microsurface>
 #include <Microcosm/Render/MicrosurfaceModels>
-#endif
+#include <Microcosm/Render/Primitives>
+#include <Microcosm/Render/RefractiveIndex>
 
 void StatueWorld::initialize() {
   auto happy = mi::geometry::Mesh(mi::geometry::FileOBJ("/home/michael/Documents/Assets/Models/Standalone/dragon1.obj"));
@@ -23,23 +22,43 @@ bool StatueWorld::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSurface
   mi::render::Manifold manifold;
   if (auto param = mesh.intersect(mi::Ray3d(ray), manifold)) {
     ray.maxParam = *param;
+#if 0
     mi::SimplexNoise3d noise1{15};
     mi::SimplexNoise3d noise2{18};
     mi::Vector3d gradient1;
     mi::Vector3d gradient2;
-    noise1(mi::Vector3d(100, 100, 100) * manifold.properTangentSpace.point, &gradient1);
-    noise2(mi::Vector3d(500, 500, 500) * manifold.properTangentSpace.point + 30000, &gradient2);
-    manifold.pseudoTangentSpace->perturbWithLocalNormal(mi::Vector3d(0, 0, 1) + 0.02 * gradient1 + 0.01 * gradient2);
+    noise1(mi::Vector3d(100, 100, 100) * manifold.proper.point, &gradient1);
+    noise2(mi::Vector3d(500, 500, 500) * manifold.proper.point + 30000, &gradient2);
+    manifold.pseudo->perturbWithLocalNormal(mi::Vector3d(0, 0, 1) + 0.02 * gradient1 + 0.01 * gradient2);
+#endif
 
-    mi::Matrix3d basis = mi::Matrix3d::orthonormalBasis(mi::normalize(manifold.pseudoTangentSpace->normal));
-    localSurface.position = manifold.properTangentSpace.point;
-    localSurface.texcoord = manifold.properTangentSpace.parameters;
+    mi::Matrix3d basis = mi::Matrix3d::orthonormalBasis(mi::normalize(manifold.pseudo.normal));
+    localSurface.position = manifold.proper.point;
+    localSurface.texcoord = manifold.proper.parameters;
     localSurface.normal = basis.col(2);
     localSurface.tangents[0] = basis.col(0);
     localSurface.tangents[1] = basis.col(1);
-    localSurface.scatteringProvider = [&](const d5b::SpectralVector &wavelength, d5b::Scattering &scattering) {
-      scattering.setLambertDiffuse(0.1, 0);
-    };
+    localSurface.scatteringProvider =
+      [&, point = manifold.proper.point](const d5b::SpectralVector &wavelength, d5b::Scattering &scattering) {
+        scattering = mi::render::DisneyDiffuseBRDF(
+          mi::render::convertRGBToSpectrumAlbedo(wavelength, {0.1, 0.1, 0.1}),
+          mi::render::convertRGBToSpectrumAlbedo(wavelength, {0.1, 0.4, 0.2}),
+          mi::render::convertRGBToSpectrumAlbedo(wavelength, {0.1, 0.2, 0.1}),
+          mi::render::convertRGBToSpectrumAlbedo(wavelength, {0.4, 0.3, 0.1}));
+#if 0
+          auto m = std::make_shared<mi::render::ConductiveMicrosurfaceBRDF>(
+            1.0 / mi::render::refractiveIndexOf(mi::render::KnownMetal::Hg)(wavelength), wavelength * 0.0 + 0.1);
+          scattering.evaluateBSDF = [m](d5b::Vector3 omegaO, d5b::Vector3 omegaI, d5b::SpectralVector &f) {
+            f = m->scatterBSDF(omegaO, omegaI);
+          };
+          scattering.evaluatePDF = [m](d5b::Vector3 omegaO, d5b::Vector3 omegaI) { return m->scatterPDF(omegaO, omegaI); };
+          scattering.importanceSample =
+            [m](d5b::Random &random, d5b::Vector3 omegaO, d5b::Vector3 &omegaI, d5b::SpectralVector &beta) {
+              return m->importanceSample(random, omegaO, omegaI, beta);
+            };
+#endif
+        // scattering.setLambertDiffuse(0.1, 0);
+      };
     result = true;
   }
 #if 0
@@ -221,7 +240,7 @@ bool StatueWorld::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSurface
     localSurface.tangents[1] = {0, 1, 0};
     localSurface.normal = {0, 0, 1};
     localSurface.scatteringProvider = [&](const d5b::SpectralVector &wavelength, d5b::Scattering &scattering) {
-      scattering.setLambertDiffuse(0.1, 0);
+      scattering = mi::render::LambertBSDF(wavelength * 0.0 + 0.1, wavelength * 0.0);
     };
     result = true;
   }
@@ -239,44 +258,37 @@ void StatueWorld::directLightsForVertex(
     light1.importanceSampleSolidAngle = [emission = std::move(emission)](
                                           d5b::Random &random, d5b::Vector3 position, d5b::Vector3 &direction, double &distance,
                                           d5b::SpectralVector &emissionOut) -> double {
-      double diskRadius = 1;
-      mi::Vector3d diskPosition = {4, -4, 4};
-      mi::Vector3d diskNormal = mi::normalize(diskPosition);
-      mi::Matrix3d diskMatrix = mi::Matrix3d::orthonormalBasis(diskNormal);
-      mi::Vector2d diskSample = diskRadius * mi::render::uniformDiskSample(random);
-      mi::Vector3d samplePosition = diskPosition + diskMatrix.col(0) * diskSample[0] + diskMatrix.col(1) * diskSample[1];
-      direction = mi::fastNormalize(samplePosition - position);
-      distance = mi::fastLength(samplePosition - position);
-      if (dot(direction, diskNormal) > 0)
+      mi::render::Manifold manifold;
+      mi::render::Disk disk{1};
+      mi::render::TransformedPrimitive diskInstance{mi::DualQuaterniond::lookAt({4, -4, 4}, {0, 0, 0}, {0, 0, 1}), &disk};
+      double density = diskInstance.solidAngleSample(position, random, manifold);
+      direction = mi::fastNormalize(manifold.proper.point - position);
+      distance = mi::fastLength(manifold.proper.point - position);
+      if (dot(direction, manifold.proper.normal) > 0)
         emissionOut.assign(emission);
       else
         emissionOut = 0;
-      return mi::render::areaToSolidAngleMeasure(position, samplePosition, diskNormal) /
-             (mi::constants::Pi<double> * diskRadius * diskRadius);
+      return density;
     };
     light1.numSubSamples = 2;
   }
-
   {
     d5b::SpectralVector emission = 50 * mi::render::spectrumIlluminantF(wavelength, 3);
     auto &light2 = directLights.emplace_back();
     light2.importanceSampleSolidAngle = [emission = std::move(emission)](
                                           d5b::Random &random, d5b::Vector3 position, d5b::Vector3 &direction, double &distance,
                                           d5b::SpectralVector &emissionOut) -> double {
-      double diskRadius = 1;
-      mi::Vector3d diskPosition = {-5, 2, 4};
-      mi::Vector3d diskNormal = mi::normalize(diskPosition);
-      mi::Matrix3d diskMatrix = mi::Matrix3d::orthonormalBasis(diskNormal);
-      mi::Vector2d diskSample = diskRadius * mi::render::uniformDiskSample(random);
-      mi::Vector3d samplePosition = diskPosition + diskMatrix.col(0) * diskSample[0] + diskMatrix.col(1) * diskSample[1];
-      direction = mi::fastNormalize(samplePosition - position);
-      distance = mi::fastLength(samplePosition - position);
-      if (dot(direction, diskNormal) > 0)
+      mi::render::Manifold manifold;
+      mi::render::Disk disk{1};
+      mi::render::TransformedPrimitive diskInstance{mi::DualQuaterniond::lookAt({-5, 2, 4}, {0, 0, 0}, {0, 0, 1}), &disk};
+      double density = diskInstance.solidAngleSample(position, random, manifold);
+      direction = mi::fastNormalize(manifold.proper.point - position);
+      distance = mi::fastLength(manifold.proper.point - position);
+      if (dot(direction, manifold.proper.normal) > 0)
         emissionOut.assign(emission);
       else
         emissionOut = 0;
-      return mi::render::areaToSolidAngleMeasure(position, samplePosition, diskNormal) /
-             (mi::constants::Pi<double> * diskRadius * diskRadius);
+      return density;
     };
     light2.numSubSamples = 2;
   }

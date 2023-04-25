@@ -3,7 +3,6 @@ add_library(
   SHARED
   LocalSurface.cc
   LocalVolume.cc
-  Scattering.cc
   Simulation.cc
   World.cc
   )

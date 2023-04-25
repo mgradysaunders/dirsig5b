@@ -2,7 +2,6 @@
 
 #include "dirsig5b/LocalSurface.h"
 #include "dirsig5b/LocalVolume.h"
-#include "dirsig5b/Scattering.h"
 
 namespace d5b {
 
@@ -42,12 +41,12 @@ public:
   /// behavior is to scattering like a delta in the direction of propagation.
   std::optional<Scattering> scattering{};
 
-  void evaluateBSDF(Vector3 omegaO, Vector3 omegaI, SpectralVector &f) const {
-    scattering->evaluateBSDF(dot(omegaO, localToWorld), dot(omegaI, localToWorld), f);
+  void scatterBSDF(Vector3 omegaO, Vector3 omegaI, SpectralVector &f) const {
+    f = scattering->scatterBSDF(dot(omegaO, localToWorld), dot(omegaI, localToWorld));
   }
 
-  [[nodiscard]] double evaluatePDF(Vector3 omegaO, Vector3 omegaI) const {
-    return scattering->evaluatePDF(dot(omegaO, localToWorld), dot(omegaI, localToWorld));
+  [[nodiscard]] double scatterPDF(Vector3 omegaO, Vector3 omegaI) const {
+    return scattering->scatterPDF(dot(omegaO, localToWorld), dot(omegaI, localToWorld));
   }
 
   [[nodiscard]] double importanceSample(Random &random, Vector3 omegaO, Vector3 &omegaI, SpectralVector &throughput) const {
