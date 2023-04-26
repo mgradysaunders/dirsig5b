@@ -11,9 +11,8 @@
 void StatueWorld::initialize() {
   auto happy = mi::geometry::Mesh(mi::geometry::FileOBJ("/home/michael/Documents/Assets/Models/Standalone/dragon1.obj"));
   happy.rotateZ(-0.6);
+  happy.scale(2);
   happy.calculateNormals();
-  // happy.translate(mi::Vector3f(0, 0, -happy.boundBox()[0][2]));
-  // happy.scale(4);
   mesh.build(happy);
 }
 
@@ -42,22 +41,13 @@ bool StatueWorld::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSurface
       [&, point = manifold.proper.point](const d5b::SpectralVector &wavelength, d5b::Scattering &scattering) {
         scattering = mi::render::DisneyDiffuseBRDF(
           mi::render::convertRGBToSpectrumAlbedo(wavelength, {0.1, 0.1, 0.1}),
-          mi::render::convertRGBToSpectrumAlbedo(wavelength, {0.1, 0.4, 0.2}),
-          mi::render::convertRGBToSpectrumAlbedo(wavelength, {0.1, 0.2, 0.1}),
-          mi::render::convertRGBToSpectrumAlbedo(wavelength, {0.4, 0.3, 0.1}));
+          mi::render::convertRGBToSpectrumAlbedo(wavelength, {0.1, 0.2, 0.4}),
+          mi::render::convertRGBToSpectrumAlbedo(wavelength, {0.2, 0.1, 0.1}),
+          mi::render::convertRGBToSpectrumAlbedo(wavelength, {0.1, 0.3, 0.5}));
 #if 0
           auto m = std::make_shared<mi::render::ConductiveMicrosurfaceBRDF>(
             1.0 / mi::render::refractiveIndexOf(mi::render::KnownMetal::Hg)(wavelength), wavelength * 0.0 + 0.1);
-          scattering.evaluateBSDF = [m](d5b::Vector3 omegaO, d5b::Vector3 omegaI, d5b::SpectralVector &f) {
-            f = m->scatterBSDF(omegaO, omegaI);
-          };
-          scattering.evaluatePDF = [m](d5b::Vector3 omegaO, d5b::Vector3 omegaI) { return m->scatterPDF(omegaO, omegaI); };
-          scattering.importanceSample =
-            [m](d5b::Random &random, d5b::Vector3 omegaO, d5b::Vector3 &omegaI, d5b::SpectralVector &beta) {
-              return m->importanceSample(random, omegaO, omegaI, beta);
-            };
 #endif
-        // scattering.setLambertDiffuse(0.1, 0);
       };
     result = true;
   }
@@ -253,7 +243,7 @@ void StatueWorld::directLightsForVertex(
   const d5b::SpectralVector &wavelength,
   std::vector<d5b::DirectLight> &directLights) const {
   {
-    d5b::SpectralVector emission = 160 * mi::render::spectrumIlluminantF(wavelength, 1);
+    d5b::SpectralVector emission = 50 * mi::render::spectrumIlluminantD65(wavelength);
     auto &light1 = directLights.emplace_back();
     light1.importanceSampleSolidAngle = [emission = std::move(emission)](
                                           d5b::Random &random, d5b::Vector3 position, d5b::Vector3 &direction, double &distance,
@@ -305,10 +295,11 @@ int main() {
   camera.sizeX = 1920;
   camera.sizeY = 1080;
   camera.fovY = 35.0_degrees;
+  camera.wavelengthCount = 20;
   camera.dofRadius = 0; // 0.01;
   camera.dofDistance = 4.5;
   camera.maxBounces = 5;
-  camera.maxSamples = 1024;
+  camera.maxSamples = 24;
   camera.numSamplesPerBatch = 8;
   camera.gain = 0.5;
   camera.initialize();

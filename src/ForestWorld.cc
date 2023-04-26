@@ -3,9 +3,8 @@
 
 #include <Microcosm/Geometry/DynamicKDTree>
 #include <Microcosm/Noise>
-#include <Microcosm/Render/ConvertRGB>
-#include <Microcosm/Render/Illuminant>
-#include <Microcosm/Render/Microsurface>
+#include <Microcosm/Render/DiffuseModels>
+#include <Microcosm/Render/Primitives>
 #include <Microcosm/Render/Prospect>
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
@@ -14,7 +13,7 @@
 
 void ForestWorld::initialize() {
   int g = 0;
-  for (const auto &group : std::filesystem::directory_iterator{"/home/michael/Documents/Models/Broadleaf-Summer"}) {
+  for (const auto &group : std::filesystem::directory_iterator{"/home/michael/Documents/Assets/Models/Broadleaf-Summer"}) {
     if (g++ > 16) break;
     std::string groupName = group.path().stem().string();
     auto &plant = plants.emplace_back();
@@ -32,6 +31,10 @@ void ForestWorld::initialize() {
             }
           }
           auto &plantMesh = plant.meshes.emplace_back();
+          std::vector<mi::Vector3f> positions;
+          std::vector<mi::Vector2f> texcoords;
+          std::vector<mi::Vector3f> normals;
+          std::vector<int16_t> materials;
           for (size_t i = 0; i < scene->mNumMeshes; i++) {
             const auto *mesh = scene->mMeshes[i];
             for (size_t j = 0; j < mesh->mNumFaces; j++) {
@@ -41,29 +44,46 @@ void ForestWorld::initialize() {
                   const auto &vA = mesh->mVertices[face.mIndices[0]];
                   const auto &vB = mesh->mVertices[face.mIndices[k + 0]];
                   const auto &vC = mesh->mVertices[face.mIndices[k + 1]];
-                  plantMesh.positions.push_back(mi::Vector3f(vA.x, vA.y, vA.z));
-                  plantMesh.positions.push_back(mi::Vector3f(vB.x, vB.y, vB.z));
-                  plantMesh.positions.push_back(mi::Vector3f(vC.x, vC.y, vC.z));
+                  positions.push_back(mi::Vector3f(vA.x, vA.y, vA.z));
+                  positions.push_back(mi::Vector3f(vB.x, vB.y, vB.z));
+                  positions.push_back(mi::Vector3f(vC.x, vC.y, vC.z));
                 }
                 {
                   const auto &vA = mesh->mTextureCoords[0][face.mIndices[0]];
                   const auto &vB = mesh->mTextureCoords[0][face.mIndices[k + 0]];
                   const auto &vC = mesh->mTextureCoords[0][face.mIndices[k + 1]];
-                  plantMesh.texcoords.push_back(mi::Vector2f(vA.x, vA.y));
-                  plantMesh.texcoords.push_back(mi::Vector2f(vB.x, vB.y));
-                  plantMesh.texcoords.push_back(mi::Vector2f(vC.x, vC.y));
+                  texcoords.push_back(mi::Vector2f(vA.x, vA.y));
+                  texcoords.push_back(mi::Vector2f(vB.x, vB.y));
+                  texcoords.push_back(mi::Vector2f(vC.x, vC.y));
                 }
                 {
                   const auto &vA = mesh->mNormals[face.mIndices[0]];
                   const auto &vB = mesh->mNormals[face.mIndices[k + 0]];
                   const auto &vC = mesh->mNormals[face.mIndices[k + 1]];
-                  plantMesh.normals.push_back(mi::Vector3f(vA.x, vA.y, vA.z));
-                  plantMesh.normals.push_back(mi::Vector3f(vB.x, vB.y, vB.z));
-                  plantMesh.normals.push_back(mi::Vector3f(vC.x, vC.y, vC.z));
+                  normals.push_back(mi::Vector3f(vA.x, vA.y, vA.z));
+                  normals.push_back(mi::Vector3f(vB.x, vB.y, vB.z));
+                  normals.push_back(mi::Vector3f(vC.x, vC.y, vC.z));
                 }
-                plantMesh.materials.push_back(mesh->mMaterialIndex == leafMaterial ? 0 : 1);
+                materials.push_back(mesh->mMaterialIndex == leafMaterial ? 0 : 1);
               }
             }
+          }
+          plantMesh.positions.resize(positions.size());
+          std::copy(&positions[0][0], &positions.back()[0] + 3, &plantMesh.positions(0, 0));
+          if (!texcoords.empty()) {
+            plantMesh.texcoords.emplace();
+            plantMesh.texcoords->resize(texcoords.size());
+            std::copy(&texcoords[0][0], &texcoords.back()[0] + 2, &(*plantMesh.texcoords)(0, 0));
+          }
+          if (!normals.empty()) {
+            plantMesh.normals.emplace();
+            plantMesh.normals->resize(normals.size());
+            std::copy(&normals[0][0], &normals.back()[0] + 3, &(*plantMesh.normals)(0, 0));
+          }
+          if (!materials.empty()) {
+            plantMesh.materials.emplace();
+            plantMesh.materials->resize(materials.size());
+            std::copy(materials.begin(), materials.end(), &(*plantMesh.materials)[0]);
           }
           plantMesh.build();
         }
@@ -78,8 +98,8 @@ void ForestWorld::initialize() {
   }
 
   mi::Pcg32 random;
-  for (int i = -7 * 0; i <= +1 * 0; i++)
-    for (int j = -6 * 0; j <= +1 * 0; j++) {
+  for (int i = -7; i <= +1; i++)
+    for (int j = -6; j <= +1; j++) {
       std::vector<mi::Vector2f> instanceLocations;
       {
         mi::geometry::DynamicKDTree2 kdtree;
@@ -88,8 +108,8 @@ void ForestWorld::initialize() {
           mi::Vector2f position = {
             (2 * i + 2 * mi::randomize<float>(random) - 1) * 40000, //
             (2 * j + 2 * mi::randomize<float>(random) - 1) * 40000};
-          position = mi::uniformDiskSample<float>(random) * 2000;
-          if (kdtree.nearest(position).dist > 500) {
+          /* position = mi::render::uniformDiskSample(random) * 2000; */
+          if (kdtree.nearestTo(position).dist > 500) {
             kdtree.insert(position), failure = 0;
             instanceLocations.push_back(position);
           }
@@ -110,9 +130,9 @@ void ForestWorld::initialize() {
       std::cout << plantInstances.size() << std::endl;
     }
 
-  plantInstanceTree.build(plantInstances, 1, [](const auto &inst) -> mi::BoundBox3f {
+  plantInstanceTree.build(1, plantInstances, [](const auto &inst) -> mi::BoundBox3f {
     mi::BoundBox3f boxResult;
-    auto box = inst.mesh->tree[0].box;
+    auto box = inst.mesh->triangleBVH[0].box;
     for (auto corner : box.allCorners()) boxResult |= inst.transform.applyForward(d5b::Transform::Rule::Affine, corner);
     return boxResult;
   });
@@ -120,6 +140,53 @@ void ForestWorld::initialize() {
 
 std::optional<float>
 ForestWorld::PlantInstance::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSurface &localSurface) const {
+  mi::render::Manifold manifold;
+  if (auto param = mesh->intersect(mi::Ray3d(ray), manifold)) {
+    ray.maxParam = *param;
+    mi::Matrix3d basis = manifold.pseudo.orthonormalLocalToWorld();
+    localSurface.position = manifold.proper.point;
+    localSurface.texcoord = manifold.pseudo.parameters;
+    localSurface.normal = basis.col(2);
+    localSurface.tangents[0] = basis.col(0);
+    localSurface.tangents[1] = basis.col(1);
+    localSurface.withTransform(transform);
+    auto material = (*mesh->materials)[manifold.primitiveIndex];
+    if (material == 0) {
+      int y = plant->leafOpacity.size(0) * (1 - mi::fastFract(localSurface.texcoord[1]));
+      int x = plant->leafOpacity.size(1) * mi::fastFract(localSurface.texcoord[0]);
+      if (plant->leafOpacity(y, x, 0) == 0) {
+        ray.minParam = *param + 1e-3;
+        return intersect(random, ray, localSurface);
+      }
+    }
+    localSurface.scatteringProvider = [this, point = manifold.proper.point, material, texcoord = localSurface.texcoord](
+                                        const d5b::SpectralVector &wavelength, d5b::Scattering &scattering) {
+      if (material == 0) {
+        mi::render::Prospect prospect;
+        prospect.numLayers = numLayers;
+        prospect.chlorophylls = chlorophylls;
+        prospect.anthocyanins = anthocyanins;
+        prospect.carotenoids = carotenoids;
+        prospect.dryMatter = dryMatter;
+        auto [totalR, totalT] = prospect(wavelength);
+        // int y = plant->leafAlbedo.size(0) * (1 - mi::fastFract(texcoord[1]));
+        // int x = plant->leafAlbedo.size(1) * mi::fastFract(texcoord[0]);
+        // double a = mi::saturate(mi::decodeSRGB(plant->leafAlbedo(y, x, 0) * (1.0 / 255.0)));
+        scattering = mi::render::LambertBSDF(totalR, totalT);
+      } else {
+        mi::Vector3d color{1, 1, 1};
+        int y = plant->barkAlbedo.size(0) * (1 - mi::fastFract(texcoord[1]));
+        int x = plant->barkAlbedo.size(1) * mi::fastFract(texcoord[0]);
+        color[0] = mi::decodeSRGB(plant->barkAlbedo(y, x, 0) * (1.0 / 255.0));
+        color[1] = mi::decodeSRGB(plant->barkAlbedo(y, x, 1) * (1.0 / 255.0));
+        color[2] = mi::decodeSRGB(plant->barkAlbedo(y, x, 2) * (1.0 / 255.0));
+        scattering = mi::render::LambertBSDF(mi::render::convertRGBToSpectrumAlbedo(wavelength, color), wavelength * 0.0);
+      }
+    };
+    return *param;
+  }
+  return {};
+#if 0
   mi::render::TriangleMesh::Location location;
   if (auto param = mesh->rayTest(mi::Ray3f{ray}, location)) {
     localSurface.position = location.point;
@@ -130,14 +197,6 @@ ForestWorld::PlantInstance::intersect(d5b::Random &random, d5b::Ray ray, d5b::Lo
     localSurface.withTransform(transform);
     auto texcoord = location.shading.texcoord;
     auto material = mesh->materials[location.index];
-    if (material == 0) {
-      int y = plant->leafOpacity.size(0) * (1 - mi::fastFract(texcoord[1]));
-      int x = plant->leafOpacity.size(1) * mi::fastFract(texcoord[0]);
-      if (plant->leafOpacity(y, x, 0) == 0) {
-        ray.minParam = *param + 1e-3;
-        return intersect(random, ray, localSurface);
-      }
-    }
     localSurface.scatteringProvider = [&, position = localSurface.position, texcoord,
                                        material](const d5b::SpectralVector &wavelength, d5b::Scattering &scattering) {
       if (material == 0) {
@@ -195,7 +254,7 @@ ForestWorld::PlantInstance::intersect(d5b::Random &random, d5b::Ray ray, d5b::Lo
     };
     return param;
   }
-  return std::nullopt;
+#endif
 }
 
 bool ForestWorld::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSurface &localSurface) const {
@@ -206,19 +265,18 @@ bool ForestWorld::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSurface
     d5b::Ray localRay{ray};
     localRay.withTransform(plantInstance.transform.inverted());
     if (auto param = plantInstance.intersect(random, localRay, localSurface)) {
-      ray.maxParam = *param;
-      topRay.maxParam = *param;
+      ray.maxParam = *param, topRay.maxParam = *param;
       result = true;
     }
     return true; // Continue
   });
-  if (auto param = mi::Plane3d({0, 0, 1}, 0).rayTest(mi::Ray3d(ray.org, ray.dir, ray.minParam, ray.maxParam))) {
+  if (auto param = mi::Plane3d({0, 0, 1}, 0).rayCast(mi::Ray3d(ray))) {
     localSurface.position = ray.org + *param * ray.dir;
     localSurface.tangents[0] = {1, 0, 0};
     localSurface.tangents[1] = {0, 1, 0};
     localSurface.normal = {0, 0, 1};
     localSurface.scatteringProvider = [&](const d5b::SpectralVector &wavelength, d5b::Scattering &scattering) {
-      scattering.setLambertDiffuse(0.04, 0);
+      scattering = mi::render::LambertBSDF(wavelength * 0.0 + 0.1, wavelength * 0.0);
     };
     result = true;
   }
@@ -230,18 +288,16 @@ void ForestWorld::directLightsForVertex(
   const d5b::Vertex &vertex,
   const d5b::SpectralVector &wavelength,
   std::vector<d5b::DirectLight> &directLights) const {
-#if 0
+#if 1
   {
-    d5b::SpectralVector emission{wavelength.shape};
-    for (size_t i = 0; i < wavelength.size(); i++)
-      emission[i] = mi::render::IlluminantD(mi::convertCCTToXY(5004.0f), wavelength[i]);
+    d5b::SpectralVector emission = mi::render::spectrumIlluminantD50(wavelength);
     auto &sun = directLights.emplace_back();
     sun.importanceSampleSolidAngle = [emission = std::move(emission)](
                                        d5b::Random &random, d5b::Vector3, d5b::Vector3 &direction, double &distance,
                                        d5b::SpectralVector &emissionOut) -> double {
       mi::Vector3d sunDirection = mi::normalize(mi::Vector3d(-1, 3, 2));
-      mi::Matrix3d sunBasis = mi::Matrix3d::buildOrthonormalBasis(sunDirection);
-      direction = mi::dot(sunBasis, mi::uniformConeSample<double>(0.9999, random));
+      mi::Matrix3d sunBasis = mi::Matrix3d::orthonormalBasis(sunDirection);
+      direction = mi::dot(sunBasis, mi::render::uniformConeSample(random, 0.9999));
       distance = d5b::Inf;
       emissionOut.assign(emission);
       return 1; // mi::uniformConePDF<double>(0.999);
@@ -249,77 +305,74 @@ void ForestWorld::directLightsForVertex(
   }
 #endif
 
+#if 0
   {
-    d5b::SpectralVector emission{wavelength.shape};
-    for (size_t i = 0; i < wavelength.size(); i++) emission[i] = 2000 * mi::render::IlluminantF(1, wavelength[i]);
+    d5b::SpectralVector emission = 2000 * mi::render::spectrumIlluminantF(wavelength, 1);
     auto &light1 = directLights.emplace_back();
     light1.importanceSampleSolidAngle = [emission = std::move(emission)](
                                           d5b::Random &random, d5b::Vector3 position, d5b::Vector3 &direction, double &distance,
                                           d5b::SpectralVector &emissionOut) -> double {
-      double diskRadius = 200;
-      mi::Vector3d diskPosition = {1000, 5000, 7000};
-      mi::Vector3d diskNormal = mi::normalize(diskPosition);
-      mi::Matrix3d diskMatrix = mi::Matrix3d::buildOrthonormalBasis(diskNormal);
-      mi::Vector2d diskSample = diskRadius * mi::uniformDiskSample<double>(random);
-      mi::Vector3d samplePosition = diskPosition + diskMatrix.col(0) * diskSample[0] + diskMatrix.col(1) * diskSample[1];
-      direction = mi::fastNormalize(samplePosition - position);
-      distance = mi::fastLength(samplePosition - position);
-      if (dot(direction, diskNormal) > 0)
+      mi::render::Manifold manifold;
+      mi::render::Disk disk{200};
+      mi::render::TransformedPrimitive diskInstance{
+        mi::DualQuaterniond::lookAt({1000, 5000, 7000}, {0, 0, 0}, {0, 0, 1}), &disk};
+      double density = diskInstance.solidAngleSample(position, random, manifold);
+      direction = mi::fastNormalize(manifold.proper.point - position);
+      distance = mi::fastLength(manifold.proper.point - position);
+      if (dot(direction, manifold.proper.normal) > 0)
         emissionOut.assign(emission);
       else
         emissionOut = 0;
-      return mi::areaToSolidAngleMeasure<double>(position, samplePosition, diskNormal) /
-             (mi::constants::Pi<double> * diskRadius * diskRadius);
+      return density;
     };
     light1.numSubSamples = 2;
   }
 
   {
-    d5b::SpectralVector emission{wavelength.shape};
-    for (size_t i = 0; i < wavelength.size(); i++) emission[i] = 500 * mi::render::IlluminantF(5, wavelength[i]);
+    d5b::SpectralVector emission = 500 * mi::render::spectrumIlluminantF(wavelength, 5);
     auto &light1 = directLights.emplace_back();
     light1.importanceSampleSolidAngle = [emission = std::move(emission)](
                                           d5b::Random &random, d5b::Vector3 position, d5b::Vector3 &direction, double &distance,
                                           d5b::SpectralVector &emissionOut) -> double {
-      double diskRadius = 500;
-      mi::Vector3d diskPosition = {1000, -5000, 7000};
-      mi::Vector3d diskNormal = mi::normalize(diskPosition);
-      mi::Matrix3d diskMatrix = mi::Matrix3d::buildOrthonormalBasis(diskNormal);
-      mi::Vector2d diskSample = diskRadius * mi::uniformDiskSample<double>(random);
-      mi::Vector3d samplePosition = diskPosition + diskMatrix.col(0) * diskSample[0] + diskMatrix.col(1) * diskSample[1];
-      direction = mi::fastNormalize(samplePosition - position);
-      distance = mi::fastLength(samplePosition - position);
-      if (dot(direction, diskNormal) > 0)
+      mi::render::Manifold manifold;
+      mi::render::Disk disk{500};
+      mi::render::TransformedPrimitive diskInstance{
+        mi::DualQuaterniond::lookAt({1000, -5000, 7000}, {0, 0, 0}, {0, 0, 1}), &disk};
+      double density = diskInstance.solidAngleSample(position, random, manifold);
+      direction = mi::fastNormalize(manifold.proper.point - position);
+      distance = mi::fastLength(manifold.proper.point - position);
+      if (dot(direction, manifold.proper.normal) > 0)
         emissionOut.assign(emission);
       else
         emissionOut = 0;
-      return mi::areaToSolidAngleMeasure<double>(position, samplePosition, diskNormal) /
-             (mi::constants::Pi<double> * diskRadius * diskRadius);
+      return density;
     };
     light1.numSubSamples = 2;
   }
+#endif
 }
 
 void ForestWorld::infiniteLightContributionForEscapedRay(
   d5b::Random &random, d5b::Ray ray, const d5b::SpectralVector &wavelength, d5b::SpectralVector &emission) const {
-  // double z = mi::unlerp(ray.dir[2], -1.0, 1.0);
-  // for (size_t i = 0; i < wavelength.size(); i++) {
-  //   emission[i] = mi::normalizedBlackbodyRadiance(mi::lerp(z, 3000.0, 12000.0), wavelength[i]);
-  // }
+  double z = mi::unlerp(ray.dir[2], -1.0, 1.0);
+  emission = mi::render::spectrumBlackbody(wavelength, mi::lerp(z, 3000.0, 12000.0));
 }
 
 int main() {
   Camera camera;
   camera.basename = "Forest";
-  camera.localToWorld = d5b::DualQuaternion::lookAt({0.15 * 20000, 0.15 * 20000, 0.15 * 20000}, {0, 0, 400}, {0, 0, 1});
-  camera.sizeX = 1920 * 2;
-  camera.sizeY = 1080 * 2;
+  camera.localToWorld = d5b::DualQuaternion::lookAt({20000, 20000, 20000}, {0, 0, 400}, {0, 0, 1});
+  camera.sizeX = 1920;
+  camera.sizeY = 1080;
   camera.fovY = 60.0_degrees;
+  camera.wavelengthCount = 200;
   camera.dofRadius = 0;
   camera.dofDistance = 600;
   camera.maxBounces = 5;
-  camera.maxSamples = 1024;
-  camera.numSamplesPerBatch = 8;
+  camera.maxSamples = 32;
+  camera.numSamplesPerBatch = 2;
+  camera.gain = 2;
+
   camera.initialize();
 
   ForestWorld forestWorld;

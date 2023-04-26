@@ -43,5 +43,5 @@ public:
 
   std::list<Plant> plants;
   std::vector<PlantInstance> plantInstances;
-  mi::geometry::ImmutableBBTree3 plantInstanceTree;
+  mi::geometry::ImmutableBVH3 plantInstanceTree;
 };
