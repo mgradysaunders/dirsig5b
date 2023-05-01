@@ -51,7 +51,7 @@ public:
 
   [[nodiscard]] double importanceSample(Random &random, Vector3 omegaO, Vector3 &omegaI, SpectralVector &throughput) const {
     omegaO = dot(omegaO, localToWorld);
-    double p = scattering->importanceSample(random, omegaO, omegaI, throughput);
+    double p = scattering->scatterImportanceSample(random, omegaO, omegaI, throughput);
     omegaI = dot(localToWorld, omegaI);
     return p;
   }

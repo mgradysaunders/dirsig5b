@@ -257,9 +257,8 @@ void StatueWorld::directLightsForVertex(
                                           d5b::Random &random, d5b::Vector3 position, d5b::Vector3 &direction, double &distance,
                                           d5b::SpectralVector &emissionOut) -> double {
       mi::render::Manifold manifold;
-      mi::render::Disk disk{1};
-      mi::render::TransformedPrimitive diskInstance{mi::DualQuaterniond::lookAt({4, -4, 4}, {0, 0, 0}, {0, 0, 1}), &disk};
-      double density = diskInstance.solidAngleSample(position, random, manifold);
+      mi::render::TransformedPrimitive disk{mi::DualQuaterniond::lookAt({4, -4, 4}, {0, 0, 0}, {0, 0, 1}), mi::render::Disk{1}};
+      double density = disk.solidAngleSample(position, random, manifold);
       direction = mi::fastNormalize(manifold.proper.point - position);
       distance = mi::fastLength(manifold.proper.point - position);
       if (dot(direction, manifold.proper.normal) > 0)
@@ -270,6 +269,7 @@ void StatueWorld::directLightsForVertex(
     };
     light1.numSubSamples = 2;
   }
+
   {
     d5b::SpectralVector emission = 50 * mi::render::spectrumIlluminantF(wavelength, 3);
     auto &light2 = directLights.emplace_back();
@@ -277,9 +277,8 @@ void StatueWorld::directLightsForVertex(
                                           d5b::Random &random, d5b::Vector3 position, d5b::Vector3 &direction, double &distance,
                                           d5b::SpectralVector &emissionOut) -> double {
       mi::render::Manifold manifold;
-      mi::render::Disk disk{1};
-      mi::render::TransformedPrimitive diskInstance{mi::DualQuaterniond::lookAt({-5, 2, 4}, {0, 0, 0}, {0, 0, 1}), &disk};
-      double density = diskInstance.solidAngleSample(position, random, manifold);
+      mi::render::TransformedPrimitive disk{mi::DualQuaterniond::lookAt({-5, 2, 4}, {0, 0, 0}, {0, 0, 1}), mi::render::Disk{1}};
+      double density = disk.solidAngleSample(position, random, manifold);
       direction = mi::fastNormalize(manifold.proper.point - position);
       distance = mi::fastLength(manifold.proper.point - position);
       if (dot(direction, manifold.proper.normal) > 0)
