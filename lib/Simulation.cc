@@ -11,7 +11,7 @@ void Simulation::simulate() {
     problemRequests.clear();
     problemRequests.reserve(512);
     sensor->request(problemRequests);
-#pragma omp parallel for num_threads(100) schedule(dynamic)
+#pragma omp parallel for schedule(dynamic)
     for (const auto &problemRequest : problemRequests) {
       simulate(problemRequest());
     }

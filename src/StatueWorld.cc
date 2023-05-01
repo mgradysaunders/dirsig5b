@@ -9,17 +9,18 @@
 #include <Microcosm/Render/RefractiveIndex>
 
 void StatueWorld::initialize() {
-  auto happy = mi::geometry::Mesh(mi::geometry::FileOBJ("/home/michael/Documents/Assets/Models/Standalone/dragon1.obj"));
-  happy.rotateZ(-0.6);
-  happy.scale(2);
-  happy.calculateNormals();
-  mesh.build(happy);
+  // auto happy = mi::geometry::Mesh(mi::geometry::FileOBJ("/home/michael/Documents/Assets/Models/Standalone/dragon1.obj"));
+  // happy.rotateZ(-0.6);
+  // happy.scale(2);
+  // happy.calculateNormals();
+  // mesh.build(happy);
 }
 
 bool StatueWorld::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSurface &localSurface) const {
   bool result{false};
+  mi::render::Sphere sphere;
   mi::render::Manifold manifold;
-  if (auto param = mesh.intersect(mi::Ray3d(ray), manifold)) {
+  if (auto param = sphere.intersect(mi::Ray3d(ray), manifold)) {
     ray.maxParam = *param;
 #if 0
     mi::SimplexNoise3d noise1{15};
@@ -39,15 +40,22 @@ bool StatueWorld::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSurface
     localSurface.tangents[1] = basis.col(1);
     localSurface.scatteringProvider =
       [&, point = manifold.proper.point](const d5b::SpectralVector &wavelength, d5b::Scattering &scattering) {
-        scattering = mi::render::DisneyDiffuseBRDF(
+        mi::render::ScatteringMixture mix;
+        auto &term1 = mix.mTerms.emplace_back();
+        term1.probability = 0.2;
+        term1.scattering = mi::render::DisneyDiffuseBRDF(
           mi::render::convertRGBToSpectrumAlbedo(wavelength, {0.1, 0.1, 0.1}),
           mi::render::convertRGBToSpectrumAlbedo(wavelength, {0.1, 0.2, 0.4}),
           mi::render::convertRGBToSpectrumAlbedo(wavelength, {0.2, 0.1, 0.1}),
           mi::render::convertRGBToSpectrumAlbedo(wavelength, {0.1, 0.3, 0.5}));
-#if 0
-          auto m = std::make_shared<mi::render::ConductiveMicrosurfaceBRDF>(
-            1.0 / mi::render::refractiveIndexOf(mi::render::KnownMetal::Hg)(wavelength), wavelength * 0.0 + 0.1);
-#endif
+        auto &term2 = mix.mTerms.emplace_back();
+        term2.probability = 0.8;
+        term2.scattering = mi::render::DielectricMicrosurfaceBRDF(
+          wavelength * 0.0 + 1 / 1.4 /*
+        1.0 / mi::render::refractiveIndexOf(mi::render::KnownMetal::Hg)(wavelength) */
+          ,
+          wavelength * 0.0 + 0.001);
+        scattering = std::move(mix);
       };
     result = true;
   }
@@ -299,7 +307,7 @@ int main() {
   camera.dofRadius = 0; // 0.01;
   camera.dofDistance = 4.5;
   camera.maxBounces = 5;
-  camera.maxSamples = 24;
+  camera.maxSamples = 64;
   camera.numSamplesPerBatch = 8;
   camera.gain = 0.5;
   camera.initialize();
