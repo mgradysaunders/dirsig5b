@@ -7,6 +7,7 @@
 #include <Microcosm/Render/MicrosurfaceModels>
 #include <Microcosm/Render/Primitives>
 #include <Microcosm/Render/RefractiveIndex>
+#include <Microcosm/Render/Shape>
 
 void StatueWorld::initialize() {
   // auto happy = mi::geometry::Mesh(mi::geometry::FileOBJ("/home/michael/Documents/Assets/Models/Standalone/dragon1.obj"));
@@ -27,19 +28,19 @@ bool StatueWorld::intersect(d5b::Random &random, d5b::Ray ray, d5b::LocalSurface
     mi::SimplexNoise3d noise2{18};
     mi::Vector3d gradient1;
     mi::Vector3d gradient2;
-    noise1(mi::Vector3d(100, 100, 100) * manifold.proper.point, &gradient1);
-    noise2(mi::Vector3d(500, 500, 500) * manifold.proper.point + 30000, &gradient2);
-    manifold.pseudo->perturbWithLocalNormal(mi::Vector3d(0, 0, 1) + 0.02 * gradient1 + 0.01 * gradient2);
+    noise1(mi::Vector3d(100, 100, 100) * manifold.correct.point, &gradient1);
+    noise2(mi::Vector3d(500, 500, 500) * manifold.correct.point + 30000, &gradient2);
+    manifold.shading->perturbWithLocalNormal(mi::Vector3d(0, 0, 1) + 0.02 * gradient1 + 0.01 * gradient2);
 #endif
 
-    mi::Matrix3d basis = mi::Matrix3d::orthonormalBasis(mi::normalize(manifold.pseudo.normal));
-    localSurface.position = manifold.proper.point;
-    localSurface.texcoord = manifold.proper.parameters;
+    mi::Matrix3d basis = mi::Matrix3d::orthonormalBasis(mi::normalize(manifold.shading.normal));
+    localSurface.position = manifold.correct.point;
+    localSurface.texcoord = manifold.correct.parameters;
     localSurface.normal = basis.col(2);
     localSurface.tangents[0] = basis.col(0);
     localSurface.tangents[1] = basis.col(1);
     localSurface.scatteringProvider =
-      [&, point = manifold.proper.point](const d5b::SpectralVector &wavelength, d5b::Scattering &scattering) {
+      [&, point = manifold.correct.point](const d5b::SpectralVector &wavelength, d5b::Scattering &scattering) {
         mi::render::ScatteringMixture mix;
         auto &term1 = mix.mTerms.emplace_back();
         term1.probability = 0.2;
@@ -257,11 +258,12 @@ void StatueWorld::directLightsForVertex(
                                           d5b::Random &random, d5b::Vector3 position, d5b::Vector3 &direction, double &distance,
                                           d5b::SpectralVector &emissionOut) -> double {
       mi::render::Manifold manifold;
-      mi::render::TransformedPrimitive disk{mi::DualQuaterniond::lookAt({4, -4, 4}, {0, 0, 0}, {0, 0, 1}), mi::render::Disk{1}};
-      double density = disk.solidAngleSample(position, random, manifold);
-      direction = mi::fastNormalize(manifold.proper.point - position);
-      distance = mi::fastLength(manifold.proper.point - position);
-      if (dot(direction, manifold.proper.normal) > 0)
+      mi::render::ShapeSolidAngle solidAngle{mi::render::Disk{1}};
+      solidAngle >>= mi::DualQuaterniond::lookAt({4, -4, 4}, {0, 0, 0}, {0, 0, 1});
+      double density = solidAngle.solidAngleSample(random, position, manifold);
+      direction = mi::fastNormalize(manifold.correct.point - position);
+      distance = mi::fastLength(manifold.correct.point - position);
+      if (dot(direction, manifold.correct.normal) > 0)
         emissionOut.assign(emission);
       else
         emissionOut = 0;
@@ -277,11 +279,12 @@ void StatueWorld::directLightsForVertex(
                                           d5b::Random &random, d5b::Vector3 position, d5b::Vector3 &direction, double &distance,
                                           d5b::SpectralVector &emissionOut) -> double {
       mi::render::Manifold manifold;
-      mi::render::TransformedPrimitive disk{mi::DualQuaterniond::lookAt({-5, 2, 4}, {0, 0, 0}, {0, 0, 1}), mi::render::Disk{1}};
-      double density = disk.solidAngleSample(position, random, manifold);
-      direction = mi::fastNormalize(manifold.proper.point - position);
-      distance = mi::fastLength(manifold.proper.point - position);
-      if (dot(direction, manifold.proper.normal) > 0)
+      mi::render::ShapeSolidAngle solidAngle{mi::render::Disk{1}};
+      solidAngle >>= mi::DualQuaterniond::lookAt({-5, 2, 4}, {0, 0, 0}, {0, 0, 1});
+      double density = solidAngle.solidAngleSample(random, position, manifold);
+      direction = mi::fastNormalize(manifold.correct.point - position);
+      distance = mi::fastLength(manifold.correct.point - position);
+      if (dot(direction, manifold.correct.normal) > 0)
         emissionOut.assign(emission);
       else
         emissionOut = 0;
